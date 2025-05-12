@@ -807,21 +807,24 @@ app.post('/webhook/whatsapp', async (req, res) => {
                     } else if ((comando === 'comandos' || comando === 'help') && (isOwner || isJogadorPermitido)) {
                         await handleComandos(chatId, isOwner);
                     }
-                    else if (isOwner) { // Comandos Exclusivos do OWNER a partir daqui
-                        switch (comando) {
+                    else if (isOwner) { // INÍCIO DO BLOCO DE COMANDOS DO OWNER
+                        switch (comando) { // INÍCIO DO SWITCH DO OWNER
                             case 'admincriar':
                                 await handleAdminCriarFicha(chatId, sender, args);
                                 break;
                             case 'adminaddxp':
                                 await handleAdminComandoFicha(chatId, args, 'addxp', modificarXP, 
-                            case 'adminsetnivel':
+                                    `XP de [NOME_PERSONAGEM_ALVO] atualizado.`, 
+                                    "Uso: `!adminaddxp <ID_ALVO> <valor>`");
+                                break;
+                            case 'adminsetnivel': // ESTA É A LINHA QUE O ERRO APONTA (ou próxima)
                                 await handleAdminComandoFicha(chatId, args, 'setnivel', modificarNivel,
-                                    `Nível de [NOME_PERSONAGEM_ALVO] atualizado.`, // Mensagem mais específica virá do callback
+                                    `Nível de [NOME_PERSONAGEM_ALVO] atualizado.`,
                                     "Uso: `!adminsetnivel <ID_ALVO> <nível>`");
                                 break;
                             case 'adminaddgaleoes':
                                 await handleAdminComandoFicha(chatId, args, 'addgaleoes', modificarGaleoes,
-                                    `Galeões de [NOME_PERSONAGEM_ALVO] atualizados.`, // Mensagem mais específica virá do callback
+                                    `Galeões de [NOME_PERSONAGEM_ALVO] atualizados.`,
                                     "Uso: `!adminaddgaleoes <ID_ALVO> <valor>`");
                                 break;
                             case 'adminadditem':
@@ -834,7 +837,7 @@ app.post('/webhook/whatsapp', async (req, res) => {
                                     `Inventário de [NOME_PERSONAGEM_ALVO] atualizado.`, 
                                     "Uso: `!admindelitem <ID_ALVO> <nome>[;qtd]`");
                                 break;
-                                                        case 'adminsetattr':
+                            case 'adminsetattr':
                                 await handleAdminSetAtributo(chatId, args);
                                 break;
                             case 'adminaddpontosattr':
@@ -843,28 +846,28 @@ app.post('/webhook/whatsapp', async (req, res) => {
                             default:
                                 await enviarMensagemTextoWhapi(chatId, `Comando de Admin "!${comando}" não reconhecido.`);
                                 break;
-                        } // Fecha o switch(comando) dentro do else if (isOwner)
+                        } // FIM DO SWITCH DO OWNER
                     } else {
                         // Jogador permitido tentou um comando não listado para ele ou um comando de admin
                         await enviarMensagemTextoWhapi(chatId, `Comando "!${comando}" não reconhecido ou você não tem permissão para usá-lo.`);
-                    }
-                } else if (textContent) { // Início do else if (textContent)
+                    } // FIM DO ELSE IF (isOwner) / else (jogador permitido)
+                } else if (textContent) { // INÍCIO DO ELSE IF (textContent) - para mensagens normais
                     // Mensagens normais
                     if (isOwner) {
                          console.log(`[Webhook] Texto normal recebido do Proprietário ${senderName}: "${textContent}"`);
                     } else if (isJogadorPermitido) {
                          console.log(`[Webhook] Texto normal recebido do Jogador Permitido ${senderName}: "${textContent}"`);
                     }
-                } // Fim do else if (textContent)
-            } // Fim do loop for (const messageData of req.body.messages)
-        } else { // Início do else para if (req.body.messages ...)
+                } // FIM DO ELSE IF (textContent)
+            } // FIM DO LOOP for (const messageData of req.body.messages)
+        } else { // INÍCIO DO ELSE para if (req.body.messages ...)
             console.log("[Webhook] Estrutura inesperada ou sem mensagens:", req.body);
-        } // Fim do else
-    } catch (error) { // Início do catch
+        } // FIM DO ELSE
+    } catch (error) { // INÍCIO DO CATCH
         console.error("Erro CRÍTICO ao processar webhook do Whapi:", error.message, error.stack);
-    } // Fim do catch
+    } // FIM DO CATCH
     res.status(200).send('OK');
-}); // Fim do app.post('/webhook/whatsapp')
+}); // FIM DO app.post('/webhook/whatsapp')
 
 // --- ROTA DE TESTE E INICIALIZAÇÃO DO SERVIDOR ---
 app.get('/', (req, res) => {
@@ -923,3 +926,4 @@ async function desligamentoGracioso(signal) {
 }
 process.on('SIGTERM', () => desligamentoGracioso('SIGTERM'));
 process.on('SIGINT', () => desligamentoGracioso('SIGINT'));
+
