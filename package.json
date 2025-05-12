@@ -9,9 +9,9 @@
   "author": "Seu Nome",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.19.2",  // Para criar o servidor web e webhook
-    "axios": "^1.7.2",     // Para fazer chamadas HTTP para a API do Whapi
-    "body-parser": "^1.20.2" // Para interpretar o corpo das requisições webhook
-    // "canvas": "^2.11.2" // Adicione quando for usar o canvas
+    "express": "^4.19.2",  
+    "axios": "^1.7.2",     
+    "body-parser": "^1.20.2" 
+    // "canvas": "^2.11.2" 
   }
 }
