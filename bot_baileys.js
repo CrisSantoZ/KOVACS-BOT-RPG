@@ -3,152 +3,259 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 // const Canvas = require('canvas'); // Descomente quando for usar o canvas
 
-// Exemplo de estrutura para UMA ficha de personagem
-// Esta estrutura ficará dentro de um objeto maior, onde a chave é o ID do jogador.
-// Ex: fichas = { "55739xxxxxxx@s.whatsapp.net": fichaDoJogador1, ... }
-
+// --- MODELO DA FICHA DE PERSONAGEM ---
 const fichaModelo = {
-    // 🧙‍♂️ INFORMAÇÕES DE USO 🧙‍♂️
-    idJogador: "", // ID do WhatsApp (ex: 55739xxxxxxx@s.whatsapp.net)
-    nomeJogador: "", // Nome do perfil do WhatsApp (podemos tentar pegar)
+    idJogador: "", 
+    nomeJogadorSalvo: "", 
     nomePersonagem: "N/A",
-    idadePersonagem: 11, // Idade inicial padrão para alunos do primeiro ano
-    casa: "Ainda não selecionado", // Ex: Grifinória, Sonserina, Corvinal, Lufa-Lufa
-    anoEmHogwarts: 1, // Ano inicial padrão
-    carreira: "Estudante", // Carreira atual ou pretendida
-    urlFotoPersonagem: "", // Opcional, link para uma imagem 2D
-    ultimaAtualizacao: "", // Data da última atualização da ficha
-
-    // ✨ DESEMPENHO E EVOLUÇÃO ✨
+    idadePersonagem: 11,
+    casa: "A Ser Definida",
+    anoEmHogwarts: 1,
+    carreira: "Estudante",
+    ultimaAtualizacao: "",
     nivelAtual: 1,
     xpAtual: 0,
-    xpProximoNivel: 100, // Exemplo, você definirá a progressão conforme seu PDF
-    pontosDeVidaMax: 100, // Baseado em Constituição ou nível
+    xpProximoNivel: 100, 
+    pontosDeVidaMax: 100,
     pontosDeVidaAtual: 100,
-    pontosDeMagiaMax: 50, // Baseado em Inteligência ou nível
+    pontosDeMagiaMax: 50,
     pontosDeMagiaAtual: 50,
     atributos: {
-        inteligencia: 5, // Valores base iniciais (exemplo)
+        inteligencia: 5,
         forca: 5,
         constituicao: 5,
         destreza: 5,
         carisma: 5,
         agilidade: 5,
-        pontosParaDistribuir: 0 // Pontos ganhos ao subir de nível
+        pontosParaDistribuir: 0
     },
-
-    // 🏰 DESEMPENHO E EVOLUÇÃO da Casa ✨
-    // Os pontos da casa geralmente são um total da casa, não individual aqui,
-    // mas podemos registrar contribuições se quiser.
-    // pontosCasaContribuidosIndividual: 0,
-
-    // ⚗️ MELHORIAS E DESENVOLVIMENTO ⚗️
-    habilidadesFeiticos: [
-        // Array de objetos: { nome: "Lumos", nivel: 1, descricao: "Cria luz..." }
-    ],
-    // Para "Materiais Adquiridos" e "Conquistas", podemos usar o inventário e um log de eventos/missões.
-
-    // 📦 Inventário 🛒
-    galeoes: 50, // Moeda inicial padrão
-    inventario: [
-        // Array de objetos: { itemNome: "Varinha Simples", quantidade: 1, tipo: "Varinha", descricao: "Varinha inicial padrão." }
-        // Ou { itemNome: "Livro de Feitiços Ano 1", quantidade: 1, tipo: "Livro" }
-    ],
-
-    // 🐾 DESEMPENHO E EVOLUÇÃO DE PETS 🐾
-    pet: null, // Objeto ou null se não tiver. Se puder ter mais de um, seria um array.
-    // Exemplo de objeto pet:
-    // pet: {
-    //     nomePet: "Corujita",
-    //     especieRaca: "Coruja Comum",
-    //     nivelPet: 1, // Ou afeto, conforme seu PDF
-    //     afetoPet: 0,
-    //     personalidadePet: "Curiosa",
-    //     habilidadesPet: ["Entrega de pequenas mensagens"]
-    // },
-
-    // Aptidões em Matérias (conforme seu PDF, escolhe 3 ao criar)
-    aptidoesMaterias: [], // Array de strings, ex: ["Defesa Contra as Artes das Trevas", "Poções"]
-    
-    // Log de Missões/Eventos para "Conquistas Importantes"
-    logConquistas: [
-        // { data: "DD/MM/AAAA", tipo: "Missão", descricao: "Completou 'O Mistério do Diário Desaparecido'", recompensa: "50 XP, 10 Galeões"}
-    ],
-
-    // ✎ NOTAÇÕES DO DM/ADM ✎
-    notacoesDM: "" // Um campo de texto livre ou um array de notas
+    galeoes: 50,
+    habilidadesFeiticos: [], 
+    inventario: [{ itemNome: "Varinha Comum", quantidade: 1, tipo: "Varinha", descricao: "Uma varinha simples, mas funcional." },{ itemNome: "Uniforme de Hogwarts", quantidade: 1, tipo: "Vestimenta" },{ itemNome: "Kit de Livros do Primeiro Ano", quantidade: 1, tipo: "Livro" }], 
+    pet: null, 
+    aptidoesMaterias: [], 
+    logConquistas: [],
+    notacoesDM: ""
 };
 
+// --- CONFIGURAÇÃO DE ARMAZENAMENTO DE DADOS (FICHAS) ---
+// O Render monta o disco em /data ou em um caminho especificado por RENDER_DISK_MOUNT_PATH.
+// Vamos usar 'kovacs_rpg_bot_data_final' para ter certeza que é uma nova pasta para esta versão.
+const DADOS_RPG_DIR = path.join(process.env.RENDER_DISK_MOUNT_PATH || '/data', 'kovacs_rpg_bot_data_final');
+const ARQUIVO_FICHAS_PATH = path.join(DADOS_RPG_DIR, 'fichas_personagens.json');
 
+let todasAsFichas = {}; // Variável global para manter as fichas em memória
+
+function garantirDiretorioDeDados() {
+    try {
+        if (!fs.existsSync(DADOS_RPG_DIR)) {
+            fs.mkdirSync(DADOS_RPG_DIR, { recursive: true });
+            console.log(`Diretório de dados RPG criado/verificado em: ${DADOS_RPG_DIR}`);
+        }
+    } catch (err) {
+        console.error("Erro crítico ao verificar/criar diretório de dados RPG:", err);
+    }
+}
+
+function carregarFichas() {
+    garantirDiretorioDeDados(); 
+    try {
+        if (fs.existsSync(ARQUIVO_FICHAS_PATH)) {
+            const data = fs.readFileSync(ARQUIVO_FICHAS_PATH, 'utf8');
+            if (data && data.trim() !== "") { // Verifica se há conteúdo antes do parse
+                todasAsFichas = JSON.parse(data);
+                console.log(`Fichas carregadas de ${ARQUIVO_FICHAS_PATH}. ${Object.keys(todasAsFichas).length} fichas encontradas.`);
+            } else {
+                todasAsFichas = {};
+                console.log(`Arquivo de fichas (${ARQUIVO_FICHAS_PATH}) encontrado, mas vazio ou inválido. Iniciando sem fichas carregadas.`);
+            }
+        } else {
+            console.log(`Arquivo de fichas (${ARQUIVO_FICHAS_PATH}) não encontrado. Iniciando sem fichas. Será criado ao salvar a primeira ficha.`);
+            todasAsFichas = {};
+        }
+    } catch (error) {
+        console.error(`Erro ao carregar/parsear fichas de ${ARQUIVO_FICHAS_PATH}:`, error);
+        todasAsFichas = {}; 
+    }
+}
+
+function salvarFichas() {
+    garantirDiretorioDeDados(); 
+    try {
+        const data = JSON.stringify(todasAsFichas, null, 2); 
+        fs.writeFileSync(ARQUIVO_FICHAS_PATH, data, 'utf8');
+        console.log("Fichas salvas com sucesso em:", ARQUIVO_FICHAS_PATH);
+    } catch (error) {
+        console.error("Erro ao salvar fichas em", ARQUIVO_FICHAS_PATH, ":", error);
+    }
+}
+
+// --- CONFIGURAÇÃO DO SERVIDOR EXPRESS ---
 const app = express();
-// Aumenta o limite do corpo da requisição para o caso de webhooks com muitos dados ou mídias
-app.use(bodyParser.json({ limit: '50mb' })); 
+app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
-const PORT = process.env.PORT || 3000; // Render define a porta, ou usamos 3000 localmente
-const WHAPI_API_TOKEN = process.env.WHAPI_API_TOKEN; // Sua variável de ambiente no Render
-const WHAPI_BASE_URL = "https://gate.whapi.cloud";   // URL base do Whapi
+const PORT = process.env.PORT || 3000;
+const WHAPI_API_TOKEN = process.env.WHAPI_API_TOKEN;
+const WHAPI_BASE_URL = "https://gate.whapi.cloud";
 
 if (!WHAPI_API_TOKEN) {
     console.error("FATAL_ERROR: Variável de ambiente WHAPI_API_TOKEN não está definida no Render!");
-    // Em um ambiente de produção real, você poderia fazer process.exit(1) aqui.
-    // Por enquanto, apenas logamos para não quebrar o deploy se a var não estiver lá durante testes iniciais.
 }
 
-// ----- INÍCIO DA LÓGICA DO SEU RPG (Exemplos) -----
-// (Mantenha a definição de 'let todasAsFichas = {};' aqui em cima)
-
-// ADICIONE AS FUNÇÕES COMPLETAS handleCriarFicha e handleVerFicha AQUI
-// (Vou omitir as definições delas aqui para não repetir o código imenso,
-// mas elas devem estar definidas no seu arquivo, como na minha resposta anterior)
+// --- FUNÇÕES DE COMANDO DO RPG ---
 async function handleCriarFicha(chatIdParaResposta, idRemetente, nomeDoRemetenteNoZap, argsComando) {
-    // ... (código completo da função handleCriarFicha que te passei)
+    const dadosComando = argsComando.join(' ');
+    const partes = dadosComando.split(';').map(p => p.trim());
+
+    if (partes.length < 3) {
+        await enviarMensagemTextoWhapi(chatIdParaResposta, "Formato incorreto! Uso: `!criar Nome do Personagem; Casa; Idade; [Carreira]`\nExemplo: `!criar Harry Potter; Grifinória; 11; Apanhador`");
+        return;
+    }
+
+    const nomePersonagemInput = partes[0];
+    const casaInput = partes[1];
+    const idadeInput = parseInt(partes[2]);
+    const carreiraInput = partes[3] || "Estudante";
+
+    if (todasAsFichas[idRemetente]) {
+        await enviarMensagemTextoWhapi(chatIdParaResposta, `Você já possui um personagem: ${todasAsFichas[idRemetente].nomePersonagem}. Por enquanto, apenas um personagem por jogador.`);
+        return;
+    }
+
+    const casasValidas = ["grifinória", "sonserina", "corvinal", "lufa-lufa"];
+    if (!casasValidas.includes(casaInput.toLowerCase())) {
+        await enviarMensagemTextoWhapi(chatIdParaResposta, `Casa "${casaInput}" inválida. As casas são: Grifinória, Sonserina, Corvinal, Lufa-Lufa.`);
+        return;
+    }
+
+    if (isNaN(idadeInput) || idadeInput < 11 || idadeInput > 18) {
+        await enviarMensagemTextoWhapi(chatIdParaResposta, `Idade "${idadeInput}" inválida. Deve ser um número entre 11 e 18 para estudantes.`);
+        return;
+    }
+    const anoCalculado = Math.max(1, Math.min(7, idadeInput - 10));
+
+    let novaFicha = JSON.parse(JSON.stringify(fichaModelo)); // Cria cópia profunda
+    
+    novaFicha.idJogador = idRemetente;
+    novaFicha.nomeJogadorSalvo = nomeDoRemetenteNoZap || idRemetente.split('@')[0];
+    novaFicha.nomePersonagem = nomePersonagemInput;
+    novaFicha.idadePersonagem = idadeInput;
+    novaFicha.casa = casaInput.charAt(0).toUpperCase() + casaInput.slice(1).toLowerCase();
+    novaFicha.anoEmHogwarts = anoCalculado;
+    novaFicha.carreira = carreiraInput;
+    novaFicha.ultimaAtualizacao = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+    // Itens iniciais já estão no fichaModelo ou podem ser adicionados aqui se preferir
+
+    todasAsFichas[idRemetente] = novaFicha;
+    salvarFichas();
+
+    await enviarMensagemTextoWhapi(chatIdParaResposta, `🎉 Personagem ${nomePersonagemInput} da casa ${novaFicha.casa}, ano ${novaFicha.anoEmHogwarts}, foi criado para você!\nUse \`!ficha\` para ver os detalhes.`);
 }
 
 async function handleVerFicha(chatIdParaResposta, idRemetente) {
-    // ... (código completo da função handleVerFicha que te passei)
+    const ficha = todasAsFichas[idRemetente];
+
+    if (!ficha) {
+        await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Você ainda não tem um personagem. Use o comando `!criar Nome; Casa; Idade; [Carreira]` para criar um.");
+        return;
+    }
+
+    let resposta = `🌟 --- Ficha de ${ficha.nomePersonagem} --- 🌟\n`;
+    if (ficha.nomeJogadorSalvo) resposta += `🧙‍♂️ Jogador: ${ficha.nomeJogadorSalvo}\n`;
+    resposta += `📜 Nome Personagem: ${ficha.nomePersonagem}\n`;
+    resposta += `🎂 Idade: ${ficha.idadePersonagem} (Ano: ${ficha.anoEmHogwarts})\n`;
+    resposta += `🏰 Casa: ${ficha.casa}\n`;
+    resposta += `🧑‍🏫 Carreira: ${ficha.carreira}\n`;
+    resposta += `✨ Nível: ${ficha.nivelAtual} (XP: ${ficha.xpAtual}/${ficha.xpProximoNivel})\n`;
+    resposta += `❤️ HP: ${ficha.pontosDeVidaAtual}/${ficha.pontosDeVidaMax}\n`;
+    resposta += `🔮 MP: ${ficha.pontosDeMagiaAtual}/${ficha.pontosDeMagiaMax}\n`;
+    resposta += `💰 Galeões: ${ficha.galeoes}G\n`;
+    
+    resposta += "\n🧠 Atributos:\n";
+    if (ficha.atributos) {
+        for (const [attr, valor] of Object.entries(ficha.atributos)) {
+            const nomeAttr = attr.charAt(0).toUpperCase() + attr.slice(1);
+            if (attr !== "pontosParaDistribuir") {
+                resposta += `  ☆ ${nomeAttr}: ${valor}\n`;
+            }
+        }
+        if (ficha.atributos.pontosParaDistribuir > 0) {
+            resposta += `  ✨ Você tem ${ficha.atributos.pontosParaDistribuir} pontos para distribuir (!usaratributo).\n`;
+        }
+    } else {
+        resposta += "  (Atributos não definidos)\n";
+    }
+
+    resposta += "\n📜 Feitiços:\n";
+    if (ficha.habilidadesFeiticos && ficha.habilidadesFeiticos.length > 0) {
+        ficha.habilidadesFeiticos.forEach(f => {
+            resposta += `  ☆ ${f.nome} (Nvl ${f.nivel || 1})\n`; // Assume Nvl 1 se não especificado
+        });
+    } else {
+        resposta += "  (Nenhum)\n";
+    }
+
+    resposta += "\n🎒 Inventário:\n";
+    if (ficha.inventario && ficha.inventario.length > 0) {
+        ficha.inventario.forEach(i => {
+            resposta += `  ☆ ${i.itemNome} (Qtd: ${i.quantidade || 1}) ${i.descricao ? '- ' + i.descricao : ''}\n`;
+        });
+    } else {
+        resposta += "  (Vazio)\n";
+    }
+
+    if (ficha.pet) {
+        resposta += "\n🐾 Pet:\n";
+        resposta += `  ☆ Nome: ${ficha.pet.nomePet || 'N/A'}\n`;
+        resposta += `  ☆ Espécie: ${ficha.pet.especieRaca || 'N/A'}\n`;
+        resposta += `  ☆ Afeto/Nível: ${ficha.pet.afetoPet || 0}\n`;
+         if(ficha.pet.habilidadesPet && ficha.pet.habilidadesPet.length > 0){
+            resposta += `  ☆ Habilidades: ${ficha.pet.habilidadesPet.join(', ')}\n`;
+        }
+    }
+    
+    resposta += `\n🕒 Última atualização: ${ficha.ultimaAtualizacao || 'N/A'}\n`;
+
+    await enviarMensagemTextoWhapi(chatIdParaResposta, resposta);
 }
 
-
-// ESTA É A FUNÇÃO QUE VOCÊ PRECISA ATUALIZAR:
-function processarComandoRPG(chatId, remetente, nomeDoRemetenteNoZap, comandoCompleto) { // Adicionei nomeDoRemetenteNoZap
-    const argsComandoOriginal = comandoCompleto.slice(1).trim(); // Pega tudo depois do '!'
-    const comandoArgsArray = argsComandoOriginal.split(/ +/g);
-    const comandoBase = comandoArgsArray.shift().toLowerCase();
-    // 'args' para handleCriarFicha deve ser o array de strings após o comando, que a função vai juntar e splitar por ';'
-    // Para outros comandos, pode ser argsComandoOriginal ou argsComandoArray dependendo do que a função espera
-
-    console.log(`Processando Comando RPG: '!${comandoBase}', De: ${nomeDoRemetenteNoZap} (${remetente}) no Chat: ${chatId}, Args originais: "${argsComandoOriginal}"`);
-
-    if (comandoBase === 'criar' || comandoBase === 'novaficha' || comandoBase === 'criarpersonagem') {
-        // Passa o array de argumentos que foi splitado por espaço.
-        // A função handleCriarFicha vai juntar e re-splitar por ';'.
-        handleCriarFicha(chatId, remetente, nomeDoRemetenteNoZap, comandoArgsArray); // CHAMANDO A FUNÇÃO REAL
-    } else if (comandoBase === 'ficha' || comandoBase === 'minhaficha') {
-        handleVerFicha(chatId, remetente); // CHAMANDO A FUNÇÃO REAL
+// --- FUNÇÃO PARA ENVIAR MENSAGENS (JÁ ESTAVA CORRETA) ---
+async function enviarMensagemTextoWhapi(para, mensagem) {
+    if (!WHAPI_API_TOKEN) {
+        console.error("Token do Whapi não configurado para envio.");
+        return;
     }
-    // Adicione outros 'else if' para mais comandos aqui
-    // else if (comandoBase === 'testeimagem') {
-    //    enviarMensagemTextoWhapi(chatId, `Comando !testeimagem recebido. Lógica do canvas a ser implementada.`);
-    // }
-    else {
-        enviarMensagemTextoWhapi(chatId, `Comando de RPG "!${comandoBase}" ainda não implementado, ${nomeDoRemetenteNoZap}.`);
+    console.log(`Enviando mensagem de texto via Whapi para ${para}: "${mensagem}"`);
+    const endpoint = "/messages/text";
+    const urlDeEnvio = `${WHAPI_BASE_URL}${endpoint}`;
+    const payload = { "to": para, "body": mensagem };
+    const headers = {
+        'Authorization': `Bearer ${WHAPI_API_TOKEN}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    };
+    try {
+        console.log(`Enviando POST para ${urlDeEnvio}`);
+        console.log(`Payload de envio:`, JSON.stringify(payload));
+        const response = await axios.post(urlDeEnvio, payload, { headers: headers });
+        console.log('Resposta do Whapi ao enviar mensagem TEXTO:', JSON.stringify(response.data, null, 2));
+    } catch (error) {
+        console.error('Erro ao enviar mensagem TEXTO pelo Whapi:');
+        if (error.response) {
+            console.error('Status do Erro:', error.response.status);
+            console.error('Dados do Erro:', JSON.stringify(error.response.data, null, 2));
+        } else {
+            console.error('Mensagem de Erro:', error.message);
+        }
     }
 }
 
-// ----- FIM DA LÓGICA DO SEU RPG (Exemplos) -----
-
-// DENTRO DO SEU WEBHOOK app.post('/webhook/whatsapp', ...)
-// A chamada para processarComandoRPG deve ser assim:
-// else if (textContent && textContent.startsWith('!')) {
-//     // 'sender' é o ID do remetente (ex: numero@s.whatsapp.net)
-//     // 'nomeRemetenteNoZap' é o nome do perfil do WhatsApp do remetente (que pegamos de messageData.from_name)
-//     processarComandoRPG(chatId, sender, nomeRemetenteNoZap, textContent); // Passa textContent inteiro
-// }
-
-// Endpoint de Webhook: O Whapi.Cloud enviará as mensagens recebidas para cá
+// --- ROTA DE WEBHOOK (PRINCIPAL LÓGICA DO BOT) ---
 app.post('/webhook/whatsapp', async (req, res) => {
     console.log('----------------------------------------------------');
     console.log('>>> Webhook do Whapi Recebido! <<<');
@@ -162,11 +269,11 @@ app.post('/webhook/whatsapp', async (req, res) => {
             for (const messageData of req.body.messages) {
                 console.log("Processando messageData:", JSON.stringify(messageData, null, 2));
 
-                // Extração de dados CONFORME A DOCUMENTAÇÃO DO WHAPI QUE VOCÊ MOSTROU:
-                const fromMe = messageData.from_me;      // boolean
-                const chatId = messageData.chat_id;      // string (ID da conversa para responder)
-                const sender = messageData.from;         // string (Quem enviou. Em grupos, é o participante)
-                const messageType = messageData.type;    // string (ex: "text", "image")
+                const fromMe = messageData.from_me;
+                const chatId = messageData.chat_id;
+                const sender = messageData.from; // Quem enviou a mensagem
+                const nomeRemetenteNoZap = messageData.from_name || (sender ? sender.split('@')[0] : 'Desconhecido'); // Nome do perfil do WhatsApp
+                const messageType = messageData.type;
                 let textContent = "";
 
                 if (messageType === 'text' && messageData.text && typeof messageData.text.body === 'string') {
@@ -188,15 +295,26 @@ app.post('/webhook/whatsapp', async (req, res) => {
                 const idParaLog = typeof chatId === 'string' ? chatId.split('@')[0] : chatId.toString();
                 const senderParaLog = sender ? (typeof sender === 'string' ? sender.split('@')[0] : sender.toString()) : 'Desconhecido';
                 
-                console.log(`Chat ID: ${idParaLog}, Remetente: ${senderParaLog}, Tipo: ${messageType}, Conteúdo: "${textContent}"`);
+                console.log(`Chat ID: ${idParaLog}, Remetente: ${senderParaLog} (Nome: ${nomeRemetenteNoZap}), Tipo: ${messageType}, Conteúdo: "${textContent}"`);
 
-                // Comando de teste simples
-                if (textContent && textContent.toLowerCase() === '!ping whapi') {
-                    await enviarMensagemTextoWhapi(chatId, 'Pong do Whapi! 🧙‍♂️ Servidor no Render está no ar e recebendo!');
-                } 
-                // Chamada para processar comandos do RPG
-                else if (textContent && textContent.startsWith('!')) { // Assumindo que comandos RPG começam com '!'
-                    processarComandoRPG(chatId, sender, textContent);
+                // Processamento de Comandos
+                if (textContent && textContent.startsWith('!')) {
+                    const args = textContent.slice(1).trim().split(/ +/g);
+                    const comando = args.shift().toLowerCase();
+                    
+                    console.log(`Comando RPG: '!${comando}', Args: [${args.join(', ')}]`);
+
+                    if (comando === 'ping') {
+                        await enviarMensagemTextoWhapi(chatId, `Pong do RPG! Olá, ${nomeRemetenteNoZap}! Estou pronto para a aventura! 🧙✨`);
+                    } else if (comando === 'criar' || comando === 'novaficha' || comando === 'criarpersonagem') {
+                        await handleCriarFicha(chatId, sender, nomeRemetenteNoZap, args);
+                    } else if (comando === 'ficha' || comando === 'minhaficha') {
+                        await handleVerFicha(chatId, sender);
+                    }
+                    // --- ADICIONE OUTROS COMANDOS AQUI ---
+                    else {
+                        await enviarMensagemTextoWhapi(chatId, `Comando de RPG "!${comando}" não reconhecido, ${nomeRemetenteNoZap}.`);
+                    }
                 }
             }
         } else {
@@ -209,91 +327,13 @@ app.post('/webhook/whatsapp', async (req, res) => {
     res.status(200).send('OK'); 
 });
 
-// Função para ENVIAR MENSAGENS DE TEXTO usando a API do Whapi.Cloud
-async function enviarMensagemTextoWhapi(para, mensagem) {
-    if (!WHAPI_API_TOKEN) {
-        console.error("Token do Whapi não configurado para envio.");
-        return;
-    }
-    console.log(`Enviando mensagem de texto via Whapi para ${para}: "${mensagem}"`);
-
-    const endpoint = "/messages/text"; // Confirmado pela sua imagem da documentação
-    const urlDeEnvio = `${WHAPI_BASE_URL}${endpoint}`;
-
-    const payload = {
-        "to": para,
-        "body": mensagem
-    };
-
-    const headers = {
-        'Authorization': `Bearer ${WHAPI_API_TOKEN}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-    };
-
-    try {
-        console.log(`Enviando POST para ${urlDeEnvio}`);
-        // console.log(`Headers para envio:`, JSON.stringify(headers)); // Descomente para depurar o token se necessário
-        console.log(`Payload de envio:`, JSON.stringify(payload));
-        
-        const response = await axios.post(urlDeEnvio, payload, { headers: headers });
-        console.log('Resposta do Whapi ao enviar mensagem TEXTO:', JSON.stringify(response.data, null, 2));
-    } catch (error) {
-        console.error('Erro ao enviar mensagem TEXTO pelo Whapi:');
-        if (error.response) {
-            console.error('Status do Erro:', error.response.status);
-            console.error('Dados do Erro:', JSON.stringify(error.response.data, null, 2));
-        } else {
-            console.error('Mensagem de Erro:', error.message);
-        }
-    }
-}
-
-// Função para ENVIAR IMAGEM (Você precisará ver o schema "Message image send parameters" do Whapi)
-// async function enviarImagemWhapi(para, bufferImagemOuUrl, legenda = "") {
-//     if (!WHAPI_API_TOKEN) {
-//         console.error("Token do Whapi não configurado para envio de imagem.");
-//         return;
-//     }
-//     console.log(`Enviando imagem via Whapi para ${para} com legenda "${legenda}"`);
-
-//     // DESCUBRA O ENDPOINT CORRETO NA DOCUMENTAÇÃO DO WHAPI PARA "Message image send"
-//     const endpoint = "/messages/image"; // <<< CHUTE! VERIFIQUE A DOCUMENTAÇÃO!
-//     const urlDeEnvio = `${WHAPI_BASE_URL}${endpoint}`;
-
-//     // O Whapi pode esperar a imagem como multipart/form-data ou um link.
-//     // Se for multipart/form-data, você precisará do 'form-data' package.
-//     // Se for um link, o payload será diferente.
-//     // Exemplo conceitual para um link (VERIFIQUE A DOCUMENTAÇÃO DO WHAPI!):
-//     // const payload = {
-//     //     "to": para,
-//     //     "caption": legenda,
-//     //     "image": { // Ou "media", "file", "url" etc.
-//     //         "url": bufferImagemOuUrl // Se for um buffer, precisará ser base64 ou enviado como arquivo
-//     //     }
-//     // };
-
-//     // const headers = {
-//     //     'Authorization': `Bearer ${WHAPI_API_TOKEN}`,
-//     //     'Content-Type': 'application/json', // Ou 'multipart/form-data'
-//     // };
-
-//     try {
-//         // const response = await axios.post(urlDeEnvio, payload, { headers: headers });
-//         // console.log('Resposta do Whapi ao enviar IMAGEM:', JSON.stringify(response.data, null, 2));
-//         console.log("Função enviarImagemWhapi precisa ser implementada conforme doc do Whapi.");
-//     } catch (error) {
-//         console.error('Erro ao enviar IMAGEM pelo Whapi:', error.response ? JSON.stringify(error.response.data, null, 2) : error.message);
-//     }
-// }
-
-
-// Rota de teste para verificar se o servidor está no ar
+// --- ROTA DE TESTE E INICIALIZAÇÃO DO SERVIDOR ---
 app.get('/', (req, res) => {
     res.send('Servidor do Bot de RPG (Whapi no Render) está operacional!');
 });
 
 app.listen(PORT, () => {
+    carregarFichas(); // Carrega as fichas quando o servidor inicia
     const publicUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
     console.log(`Servidor do bot de RPG escutando na porta ${PORT}`);
     if (process.env.RENDER_EXTERNAL_URL) {
@@ -302,3 +342,4 @@ app.listen(PORT, () => {
         console.log(`Webhook local para testes (ex: com ngrok): http://localhost:${PORT}/webhook/whatsapp`);
     }
 });
+    
