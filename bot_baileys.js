@@ -3,14 +3,13 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
-const { MongoClient, ObjectId } = require('mongodb'); // Importa o MongoClient e ObjectId
+const { MongoClient, ObjectId } = require('mongodb');
 
 // --- CONFIGURAÇÃO DE AMBIENTE E IDs ---
-const OWNER_ID = process.env.OWNER_ID; // Pega o ID do proprietário da variável de ambiente
+const OWNER_ID = process.env.OWNER_ID;
 
 // --- MODELO DA FICHA DE PERSONAGEM ---
 const fichaModelo = {
-    // idJogador (que será o _id no MongoDB, não precisa mais do campo idJogador aqui)
     nomeJogadorSalvo: "",
     nomePersonagem: "N/A",
     idadePersonagem: 11,
@@ -56,12 +55,10 @@ if (!OWNER_ID) {
     console.warn("--- ALERTA: Variável de ambiente OWNER_ID não definida! O bot pode não ter restrição de proprietário. ---");
 }
 
-
 let dbClient;
 let fichasCollection;
-let todasAsFichas = {}; // Cache em memória
+let todasAsFichas = {};
 
-// Função para conectar ao MongoDB
 async function conectarMongoDB() {
     try {
         console.log("Tentando conectar ao MongoDB Atlas...");
@@ -76,7 +73,6 @@ async function conectarMongoDB() {
     }
 }
 
-// Função para carregar fichas do MongoDB para a memória
 async function carregarFichasDoDB() {
     if (!fichasCollection) {
         console.error("Coleção de fichas não inicializada. Carregamento abortado.");
@@ -96,7 +92,6 @@ async function carregarFichasDoDB() {
     }
 }
 
-// Função para salvar/atualizar UMA ficha no MongoDB
 async function salvarFichaNoDB(idJogador, fichaData) {
     if (!fichasCollection) {
         console.error("Coleção de fichas não inicializada. Salvamento abortado para jogador:", idJogador);
@@ -129,68 +124,82 @@ if (!WHAPI_API_TOKEN) {
     console.error("FATAL_ERROR: Variável de ambiente WHAPI_API_TOKEN não está definida no Render!");
 }
 
+// --- FUNÇÕES AUXILIARES ---
+function getFichaJogador(senderId) {
+    let ficha = todasAsFichas[senderId];
+    if (!ficha && fichasCollection) { // Tenta carregar do DB se não estiver no cache (improvável para owner, mas bom ter)
+        console.warn(`[CACHE MISS] Ficha para ${senderId} não no cache. Tentando DB (isso não deveria acontecer frequentemente para owner).`);
+        // Esta parte precisaria ser async e aguardada se fôssemos usar em tempo real.
+        // Para os comandos de admin, vamos assumir que a ficha do owner já foi carregada na inicialização.
+        // Se quisermos que um admin modifique a ficha de OUTRO jogador que não está no cache,
+        // precisaríamos de uma função async para buscar essa ficha específica do DB.
+        // Por enquanto, focamos na ficha do OWNER_ID que deve estar no cache.
+    }
+    return ficha;
+}
+
+async function atualizarFichaETransmitir(chatId, senderId, ficha, mensagemSucesso) {
+    ficha.ultimaAtualizacao = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+    todasAsFichas[senderId] = ficha; // Atualiza cache
+    await salvarFichaNoDB(senderId, ficha); // Salva no DB
+    await enviarMensagemTextoWhapi(chatId, mensagemSucesso);
+}
+
+
 // --- FUNÇÕES DE COMANDO DO RPG ---
-async function handleCriarFicha(chatIdParaResposta, idRemetente, nomeDoRemetenteNoZap, argsComando) {
-    const dadosComando = argsComando.join(' ');
+
+async function handleCriarFicha(chatId, sender, senderName, args) {
+    // ... (código de handleCriarFicha permanece o mesmo)
+    const dadosComando = args.join(' ');
     const partes = dadosComando.split(';').map(p => p.trim());
 
     if (partes.length < 3) {
-        await enviarMensagemTextoWhapi(chatIdParaResposta, "Formato incorreto! Uso: `!criar Nome do Personagem; Casa; Idade; [Carreira]`\nExemplo: `!criar Harry Potter; Grifinória; 11; Apanhador`");
+        await enviarMensagemTextoWhapi(chatId, "Formato incorreto! Uso: `!criar Nome do Personagem; Casa; Idade; [Carreira]`\nExemplo: `!criar Harry Potter; Grifinória; 11; Apanhador`");
         return;
     }
-
-    const idJogador = idRemetente;
-
+    const idJogador = sender;
     if (todasAsFichas[idJogador]) {
-        await enviarMensagemTextoWhapi(chatIdParaResposta, `Você já possui um personagem: ${todasAsFichas[idJogador].nomePersonagem}. Por enquanto, apenas um personagem por jogador.`);
+        await enviarMensagemTextoWhapi(chatId, `Você já possui um personagem: ${todasAsFichas[idJogador].nomePersonagem}. Por enquanto, apenas um personagem por jogador.`);
         return;
     }
-
     const nomePersonagemInput = partes[0];
     const casaInput = partes[1];
     const idadeInput = parseInt(partes[2]);
     const carreiraInput = partes[3] || "Estudante";
-
     const casasValidas = ["grifinória", "sonserina", "corvinal", "lufa-lufa"];
     if (!casasValidas.includes(casaInput.toLowerCase())) {
-        await enviarMensagemTextoWhapi(chatIdParaResposta, `Casa "${casaInput}" inválida. As casas são: Grifinória, Sonserina, Corvinal, Lufa-Lufa.`);
+        await enviarMensagemTextoWhapi(chatId, `Casa "${casaInput}" inválida. As casas são: Grifinória, Sonserina, Corvinal, Lufa-Lufa.`);
         return;
     }
-
     if (isNaN(idadeInput) || idadeInput < 11 || idadeInput > 18) {
-        await enviarMensagemTextoWhapi(chatIdParaResposta, `Idade "${idadeInput}" inválida. Deve ser um número entre 11 e 18 para estudantes.`);
+        await enviarMensagemTextoWhapi(chatId, `Idade "${idadeInput}" inválida. Deve ser um número entre 11 e 18 para estudantes.`);
         return;
     }
     const anoCalculado = Math.max(1, Math.min(7, idadeInput - 10));
-
     let novaFicha = JSON.parse(JSON.stringify(fichaModelo));
-
-    novaFicha.nomeJogadorSalvo = nomeDoRemetenteNoZap || idJogador.split('@')[0];
+    novaFicha.nomeJogadorSalvo = senderName || idJogador.split('@')[0];
     novaFicha.nomePersonagem = nomePersonagemInput;
     novaFicha.idadePersonagem = idadeInput;
     novaFicha.casa = casaInput.charAt(0).toUpperCase() + casaInput.slice(1).toLowerCase();
     novaFicha.anoEmHogwarts = anoCalculado;
     novaFicha.carreira = carreiraInput;
-    novaFicha.ultimaAtualizacao = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
-
-    todasAsFichas[idJogador] = novaFicha;
-    await salvarFichaNoDB(idJogador, novaFicha);
-
-    await enviarMensagemTextoWhapi(chatIdParaResposta, `🎉 Personagem ${nomePersonagemInput} da casa ${novaFicha.casa}, ano ${novaFicha.anoEmHogwarts}, foi criado para você!\nUse \`!ficha\` para ver os detalhes.`);
+    
+    await atualizarFichaETransmitir(chatId, idJogador, novaFicha, `🎉 Personagem ${nomePersonagemInput} da casa ${novaFicha.casa}, ano ${novaFicha.anoEmHogwarts}, foi criado para você!\nUse \`!ficha\` para ver os detalhes.`);
 }
 
-async function handleVerFicha(chatIdParaResposta, idRemetente) {
-    const idJogador = idRemetente;
-    let ficha = todasAsFichas[idJogador];
+async function handleVerFicha(chatId, sender) {
+    // ... (código de handleVerFicha permanece o mesmo)
+    const idJogador = sender;
+    let ficha = getFichaJogador(idJogador); // Usa a função auxiliar
 
-    if (!ficha && fichasCollection) {
-        console.log(`Ficha para ${idJogador} não encontrada no cache, tentando buscar no DB...`);
+    if (!ficha && fichasCollection) { // Tentativa de carregar do DB se não estiver no cache
+        console.log(`Ficha para ${idJogador} não encontrada no cache para !ficha, tentando buscar no DB...`);
         try {
             const fichaDB = await fichasCollection.findOne({ _id: idJogador });
             if (fichaDB) {
-                todasAsFichas[idJogador] = { ...fichaDB };
+                todasAsFichas[idJogador] = { ...fichaDB }; // Atualiza o cache
                 ficha = todasAsFichas[idJogador];
-                console.log(`Ficha para ${idJogador} carregada do DB para o cache.`);
+                console.log(`Ficha para ${idJogador} carregada do DB para o cache para o comando !ficha.`);
             }
         } catch (dbError) {
             console.error(`Erro ao buscar ficha ${idJogador} no DB para handleVerFicha:`, dbError);
@@ -198,10 +207,9 @@ async function handleVerFicha(chatIdParaResposta, idRemetente) {
     }
 
     if (!ficha) {
-        await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Você ainda não tem um personagem. Use o comando `!criar Nome; Casa; Idade; [Carreira]` para criar um.");
+        await enviarMensagemTextoWhapi(chatId, "❌ Você ainda não tem um personagem. Use o comando `!criar Nome; Casa; Idade; [Carreira]` para criar um.");
         return;
     }
-
     let resposta = `🌟 --- Ficha de ${ficha.nomePersonagem} --- 🌟\n`;
     if (ficha.nomeJogadorSalvo) resposta += `🧙‍♂️ Jogador: ${ficha.nomeJogadorSalvo}\n`;
     resposta += `📜 Nome Personagem: ${ficha.nomePersonagem}\n`;
@@ -252,11 +260,162 @@ async function handleVerFicha(chatIdParaResposta, idRemetente) {
         }
     }
     resposta += `\n🕒 Última atualização: ${ficha.ultimaAtualizacao || 'N/A'}\n`;
-    await enviarMensagemTextoWhapi(chatIdParaResposta, resposta);
+    await enviarMensagemTextoWhapi(chatId, resposta);
 }
+
+// --- NOVAS FUNÇÕES DE COMANDO ---
+
+async function handleAddXP(chatId, sender, args) {
+    const ficha = getFichaJogador(sender);
+    if (!ficha) {
+        await enviarMensagemTextoWhapi(chatId, "Sua ficha não foi encontrada. Crie uma com `!criar`.");
+        return;
+    }
+    if (args.length === 0 || isNaN(parseInt(args[0]))) {
+        await enviarMensagemTextoWhapi(chatId, "Uso: `!addxp <valor_numerico>`.\nExemplo: `!addxp 50` ou `!addxp -10`");
+        return;
+    }
+    const valorXP = parseInt(args[0]);
+    ficha.xpAtual += valorXP;
+    // Adicionar lógica de level up aqui se xpAtual >= xpProximoNivel
+    // Ex: if (ficha.xpAtual >= ficha.xpProximoNivel) { /* subir nivel, resetar xp, etc */ }
+    await atualizarFichaETransmitir(chatId, sender, ficha, `XP atualizado! Você agora tem ${ficha.xpAtual} XP. (Próximo nível: ${ficha.xpProximoNivel} XP)`);
+}
+
+async function handleSetNivel(chatId, sender, args) {
+    const ficha = getFichaJogador(sender);
+    if (!ficha) {
+        await enviarMensagemTextoWhapi(chatId, "Sua ficha não foi encontrada.");
+        return;
+    }
+    if (args.length === 0 || isNaN(parseInt(args[0])) || parseInt(args[0]) < 1) {
+        await enviarMensagemTextoWhapi(chatId, "Uso: `!setnivel <novo_nivel_numerico_maior_que_0>`.\nExemplo: `!setnivel 3`");
+        return;
+    }
+    const novoNivel = parseInt(args[0]);
+    ficha.nivelAtual = novoNivel;
+    ficha.xpAtual = 0; // Reseta XP ao mudar de nível manualmente
+    ficha.xpProximoNivel = novoNivel * 100; // Exemplo de cálculo para próximo nível
+    await atualizarFichaETransmitir(chatId, sender, ficha, `Nível atualizado para ${ficha.nivelAtual}. XP zerado. Próximo nível requer ${ficha.xpProximoNivel} XP.`);
+}
+
+async function handleAddGaleoes(chatId, sender, args) {
+    const ficha = getFichaJogador(sender);
+    if (!ficha) {
+        await enviarMensagemTextoWhapi(chatId, "Sua ficha não foi encontrada.");
+        return;
+    }
+    if (args.length === 0 || isNaN(parseInt(args[0]))) {
+        await enviarMensagemTextoWhapi(chatId, "Uso: `!addgaleoes <valor_numerico>`.\nExemplo: `!addgaleoes 100` ou `!addgaleoes -20`");
+        return;
+    }
+    const valorGaleoes = parseInt(args[0]);
+    ficha.galeoes += valorGaleoes;
+    if (ficha.galeoes < 0) ficha.galeoes = 0; // Opcional: não permitir galeões negativos
+    await atualizarFichaETransmitir(chatId, sender, ficha, `Galeões atualizados! Você agora tem ${ficha.galeoes}G.`);
+}
+
+async function handleAddItem(chatId, sender, args) {
+    const ficha = getFichaJogador(sender);
+    if (!ficha) {
+        await enviarMensagemTextoWhapi(chatId, "Sua ficha não foi encontrada.");
+        return;
+    }
+    const inputCompleto = args.join(" ");
+    const partesItem = inputCompleto.split(';').map(p => p.trim());
+
+    if (partesItem.length === 0 || !partesItem[0]) {
+        await enviarMensagemTextoWhapi(chatId, "Uso: `!additem <nome do item>[;quantidade;tipo;descricao]`\nExemplo: `!additem Poção Wiggenweld;2;Poção;Cura ferimentos leves`");
+        return;
+    }
+
+    const nomeItem = partesItem[0];
+    const quantidade = partesItem[1] ? parseInt(partesItem[1]) : 1;
+    const tipoItem = partesItem[2] || "Item";
+    const descricaoItem = partesItem[3] || "";
+
+    if (isNaN(quantidade) || quantidade < 1) {
+        await enviarMensagemTextoWhapi(chatId, "Quantidade inválida. Deve ser um número maior que 0.");
+        return;
+    }
+
+    const itemExistenteIndex = ficha.inventario.findIndex(i => i.itemNome.toLowerCase() === nomeItem.toLowerCase());
+
+    if (itemExistenteIndex > -1) {
+        ficha.inventario[itemExistenteIndex].quantidade = (ficha.inventario[itemExistenteIndex].quantidade || 0) + quantidade;
+        if (descricaoItem && !ficha.inventario[itemExistenteIndex].descricao) ficha.inventario[itemExistenteIndex].descricao = descricaoItem;
+        if (tipoItem !== "Item" && !ficha.inventario[itemExistenteIndex].tipo) ficha.inventario[itemExistenteIndex].tipo = tipoItem;
+         await atualizarFichaETransmitir(chatId, sender, ficha, `Quantidade de "${nomeItem}" aumentada para ${ficha.inventario[itemExistenteIndex].quantidade}.`);
+    } else {
+        ficha.inventario.push({
+            itemNome: nomeItem,
+            quantidade: quantidade,
+            tipo: tipoItem,
+            descricao: descricaoItem
+        });
+        await atualizarFichaETransmitir(chatId, sender, ficha, `"${nomeItem}" (x${quantidade}) adicionado ao seu inventário.`);
+    }
+}
+
+async function handleDelItem(chatId, sender, args) {
+    const ficha = getFichaJogador(sender);
+    if (!ficha) {
+        await enviarMensagemTextoWhapi(chatId, "Sua ficha não foi encontrada.");
+        return;
+    }
+     const inputCompleto = args.join(" ");
+    const partesItem = inputCompleto.split(';').map(p => p.trim());
+
+    if (partesItem.length === 0 || !partesItem[0]) {
+        await enviarMensagemTextoWhapi(chatId, "Uso: `!delitem <nome do item>[;quantidade]`\nExemplo: `!delitem Varinha Quebrada;1`");
+        return;
+    }
+    const nomeItem = partesItem[0];
+    const quantidadeRemover = partesItem[1] ? parseInt(partesItem[1]) : 1;
+
+    if (isNaN(quantidadeRemover) || quantidadeRemover < 1) {
+        await enviarMensagemTextoWhapi(chatId, "Quantidade a remover inválida. Deve ser um número maior que 0.");
+        return;
+    }
+
+    const itemExistenteIndex = ficha.inventario.findIndex(i => i.itemNome.toLowerCase() === nomeItem.toLowerCase());
+
+    if (itemExistenteIndex === -1) {
+        await enviarMensagemTextoWhapi(chatId, `Item "${nomeItem}" não encontrado no seu inventário.`);
+        return;
+    }
+
+    ficha.inventario[itemExistenteIndex].quantidade -= quantidadeRemover;
+
+    if (ficha.inventario[itemExistenteIndex].quantidade <= 0) {
+        ficha.inventario.splice(itemExistenteIndex, 1); // Remove o item do array
+        await atualizarFichaETransmitir(chatId, sender, ficha, `"${nomeItem}" removido completamente do seu inventário.`);
+    } else {
+        await atualizarFichaETransmitir(chatId, sender, ficha, `${quantidadeRemover} unidade(s) de "${nomeItem}" removida(s). Restam ${ficha.inventario[itemExistenteIndex].quantidade}.`);
+    }
+}
+
+async function handleComandos(chatId, sender) {
+    // Verifica se é o OWNER_ID para mostrar comandos de admin, caso contrário, comandos de jogador (quando implementado)
+    // Por enquanto, todos os comandos são de owner
+    let resposta = "📜 --- Lista de Comandos Disponíveis --- 📜\n\n";
+    resposta += "`!ping` - Testa a conexão com o bot.\n";
+    resposta += "`!criar <nome>;<casa>;<idade>[;carreira]` - Cria sua ficha.\n";
+    resposta += "`!ficha` - Mostra sua ficha atual.\n";
+    resposta += "`!addxp <valor>` - Adiciona ou remove XP (ex: !addxp 50 ou !addxp -10).\n";
+    resposta += "`!setnivel <nível>` - Define seu nível (XP é zerado).\n";
+    resposta += "`!addgaleoes <valor>` - Adiciona ou remove galeões (ex: !addgaleoes 100).\n";
+    resposta += "`!additem <nome>[;qtd;tipo;desc]` - Adiciona um item ao inventário.\n   Ex: `!additem Poção;2;Consumível;Cura HP`\n";
+    resposta += "`!delitem <nome>[;qtd]` - Remove um item ou quantidade do inventário.\n   Ex: `!delitem Pedra Filosofal;1`\n";
+    resposta += "`!comandos` ou `!help` - Mostra esta lista.\n";
+    // Adicionar aqui comandos de admin quando existirem
+    await enviarMensagemTextoWhapi(chatId, resposta);
+}
+
 
 // --- FUNÇÃO PARA ENVIAR MENSAGENS ---
 async function enviarMensagemTextoWhapi(para, mensagem) {
+    // ... (código de enviarMensagemTextoWhapi permanece o mesmo)
     if (!WHAPI_API_TOKEN) {
         console.error("Token do Whapi não configurado para envio.");
         return;
@@ -292,7 +451,7 @@ app.post('/webhook/whatsapp', async (req, res) => {
             for (const messageData of req.body.messages) {
                 const fromMe = messageData.from_me;
                 const chatId = messageData.chat_id;
-                const sender = messageData.from; // ID completo do remetente (ex: 55... @c.us)
+                const sender = messageData.from;
                 const senderName = messageData.from_name || (sender ? sender.split('@')[0] : 'Desconhecido');
                 const messageType = messageData.type;
                 let textContent = "";
@@ -312,27 +471,25 @@ app.post('/webhook/whatsapp', async (req, res) => {
                     continue;
                 }
 
-                                // --- VERIFICAÇÃO DO PROPRIETÁRIO ---
-                console.log(`[DEBUG] Verificando proprietário:`);
-                console.log(`[DEBUG] Conteúdo de OWNER_ID (lido do env): '${OWNER_ID}' (Tipo: ${typeof OWNER_ID})`);
-                console.log(`[DEBUG] Conteúdo de sender (messageData.from): '${sender}' (Tipo: ${typeof sender})`);
-                // Aplicando .trim() para a comparação e para o log da comparação
-                const ownerIdTrimmado = OWNER_ID ? OWNER_ID.trim() : ""; // Garante que OWNER_ID existe antes de trim()
-                const senderTrimmado = sender ? sender.trim() : "";     // Garante que sender existe antes de trim()
-                console.log(`[DEBUG] Comparação (sender.trim() !== OWNER_ID.trim()): ${senderTrimmado !== ownerIdTrimmado}`);
+                // --- VERIFICAÇÃO DO PROPRIETÁRIO ---
+                // console.log(`[DEBUG] Verificando proprietário:`); // Pode remover/comentar os DEBUGs se tudo estiver OK
+                // console.log(`[DEBUG] Conteúdo de OWNER_ID (lido do env): '${OWNER_ID}' (Tipo: ${typeof OWNER_ID})`);
+                // console.log(`[DEBUG] Conteúdo de sender (messageData.from): '${sender}' (Tipo: ${typeof sender})`);
+                const ownerIdTrimmado = OWNER_ID ? OWNER_ID.trim() : "";
+                const senderTrimmado = sender ? sender.trim() : "";
+                // console.log(`[DEBUG] Comparação (sender.trim() !== OWNER_ID.trim()): ${senderTrimmado !== ownerIdTrimmado}`);
 
-                if (OWNER_ID && senderTrimmado !== ownerIdTrimmado) { // <--- LINHA ALTERADA COM .trim()
+                if (OWNER_ID && senderTrimmado !== ownerIdTrimmado) {
                     console.log(`[Webhook] Usuário ${senderName} (${sender}) não é o proprietário. Comando ignorado.`);
-                    continue; // Pula para a próxima mensagem
+                    continue;
                 }
                 // --- FIM DA VERIFICAÇÃO DO PROPRIETÁRIO ---
-            
-                // Se chegou aqui, é o proprietário quem enviou
+
                 if (textContent && textContent.startsWith('!')) {
                     const args = textContent.slice(1).trim().split(/ +/g);
                     const comando = args.shift().toLowerCase();
 
-                    console.log(`[Webhook] COMANDO AUTORIZADO: '!${comando}' | De: ${senderName} (Proprietário) | Chat: ${chatId}`);
+                    console.log(`[Webhook] COMANDO AUTORIZADO: '!${comando}' | Args: [${args.join(', ')}] | De: ${senderName} (Proprietário) | Chat: ${chatId}`);
 
                     switch (comando) {
                         case 'ping':
@@ -347,13 +504,32 @@ app.post('/webhook/whatsapp', async (req, res) => {
                         case 'minhaficha':
                             await handleVerFicha(chatId, sender);
                             break;
+                        // NOVOS COMANDOS ADICIONADOS:
+                        case 'addxp':
+                            await handleAddXP(chatId, sender, args);
+                            break;
+                        case 'setnivel':
+                            await handleSetNivel(chatId, sender, args);
+                            break;
+                        case 'addgaleoes':
+                            await handleAddGaleoes(chatId, sender, args);
+                            break;
+                        case 'additem':
+                            await handleAddItem(chatId, sender, args);
+                            break;
+                        case 'delitem':
+                            await handleDelItem(chatId, sender, args);
+                            break;
+                        case 'comandos':
+                        case 'help':
+                            await handleComandos(chatId, sender);
+                            break;
                         default:
                             await enviarMensagemTextoWhapi(chatId, `Comando de RPG "!${comando}" não reconhecido, ${senderName}.`);
                             break;
                     }
                 } else if (textContent) {
                     console.log(`[Webhook] Texto normal recebido do Proprietário ${senderName}: "${textContent}"`);
-                    // Lógica para mensagens normais do proprietário (se houver)
                 }
             }
         } else {
@@ -372,7 +548,7 @@ app.get('/', (req, res) => {
 
 async function iniciarServidor() {
     await conectarMongoDB();
-    await carregarFichasDoDB();
+    await carregarFichasDoDB(); // Garante que a ficha do owner (se existir) seja carregada no cache
 
     app.listen(PORT, () => {
         console.log("****************************************************");
@@ -390,7 +566,7 @@ async function iniciarServidor() {
         if (OWNER_ID) {
             console.log(`>>> ATENÇÃO: Bot configurado para aceitar comandos apenas do proprietário: ${OWNER_ID} <<<`);
         } else {
-            console.warn(">>> ALERTA: OWNER_ID não definido. O bot pode estar aberto a todos os comandos! <<<");
+            console.warn(">>> ALERTA: OWNER_ID não definido. O bot pode estar aberto a todos os comandos (verifique a lógica de segurança)! <<<");
         }
         console.log("****************************************************");
         console.log("*** SERVIDOR PRONTO E RODANDO           ***");
@@ -418,4 +594,3 @@ async function desligamentoGracioso(signal) {
 }
 process.on('SIGTERM', () => desligamentoGracioso('SIGTERM'));
 process.on('SIGINT', () => desligamentoGracioso('SIGINT'));
-    
