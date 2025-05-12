@@ -312,19 +312,21 @@ app.post('/webhook/whatsapp', async (req, res) => {
                     continue;
                 }
 
-                // --- VERIFICAÇÃO DO PROPRIETÁRIO ---
+                                // --- VERIFICAÇÃO DO PROPRIETÁRIO ---
                 console.log(`[DEBUG] Verificando proprietário:`);
                 console.log(`[DEBUG] Conteúdo de OWNER_ID (lido do env): '${OWNER_ID}' (Tipo: ${typeof OWNER_ID})`);
                 console.log(`[DEBUG] Conteúdo de sender (messageData.from): '${sender}' (Tipo: ${typeof sender})`);
-                console.log(`[DEBUG] Comparação (sender !== OWNER_ID): ${sender !== OWNER_ID}`);
+                // Aplicando .trim() para a comparação e para o log da comparação
+                const ownerIdTrimmado = OWNER_ID ? OWNER_ID.trim() : ""; // Garante que OWNER_ID existe antes de trim()
+                const senderTrimmado = sender ? sender.trim() : "";     // Garante que sender existe antes de trim()
+                console.log(`[DEBUG] Comparação (sender.trim() !== OWNER_ID.trim()): ${senderTrimmado !== ownerIdTrimmado}`);
 
-                if (OWNER_ID && sender !== OWNER_ID) {
+                if (OWNER_ID && senderTrimmado !== ownerIdTrimmado) { // <--- LINHA ALTERADA COM .trim()
                     console.log(`[Webhook] Usuário ${senderName} (${sender}) não é o proprietário. Comando ignorado.`);
                     continue; // Pula para a próxima mensagem
                 }
                 // --- FIM DA VERIFICAÇÃO DO PROPRIETÁRIO ---
             
-                
                 // Se chegou aqui, é o proprietário quem enviou
                 if (textContent && textContent.startsWith('!')) {
                     const args = textContent.slice(1).trim().split(/ +/g);
