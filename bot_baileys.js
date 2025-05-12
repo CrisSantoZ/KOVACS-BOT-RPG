@@ -5,6 +5,83 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 // const Canvas = require('canvas'); // Descomente quando for usar o canvas
 
+// Exemplo de estrutura para UMA ficha de personagem
+// Esta estrutura ficará dentro de um objeto maior, onde a chave é o ID do jogador.
+// Ex: fichas = { "55739xxxxxxx@s.whatsapp.net": fichaDoJogador1, ... }
+
+const fichaModelo = {
+    // 🧙‍♂️ INFORMAÇÕES DE USO 🧙‍♂️
+    idJogador: "", // ID do WhatsApp (ex: 55739xxxxxxx@s.whatsapp.net)
+    nomeJogador: "", // Nome do perfil do WhatsApp (podemos tentar pegar)
+    nomePersonagem: "N/A",
+    idadePersonagem: 11, // Idade inicial padrão para alunos do primeiro ano
+    casa: "Ainda não selecionado", // Ex: Grifinória, Sonserina, Corvinal, Lufa-Lufa
+    anoEmHogwarts: 1, // Ano inicial padrão
+    carreira: "Estudante", // Carreira atual ou pretendida
+    urlFotoPersonagem: "", // Opcional, link para uma imagem 2D
+    ultimaAtualizacao: "", // Data da última atualização da ficha
+
+    // ✨ DESEMPENHO E EVOLUÇÃO ✨
+    nivelAtual: 1,
+    xpAtual: 0,
+    xpProximoNivel: 100, // Exemplo, você definirá a progressão conforme seu PDF
+    pontosDeVidaMax: 100, // Baseado em Constituição ou nível
+    pontosDeVidaAtual: 100,
+    pontosDeMagiaMax: 50, // Baseado em Inteligência ou nível
+    pontosDeMagiaAtual: 50,
+    atributos: {
+        inteligencia: 5, // Valores base iniciais (exemplo)
+        forca: 5,
+        constituicao: 5,
+        destreza: 5,
+        carisma: 5,
+        agilidade: 5,
+        pontosParaDistribuir: 0 // Pontos ganhos ao subir de nível
+    },
+
+    // 🏰 DESEMPENHO E EVOLUÇÃO da Casa ✨
+    // Os pontos da casa geralmente são um total da casa, não individual aqui,
+    // mas podemos registrar contribuições se quiser.
+    // pontosCasaContribuidosIndividual: 0,
+
+    // ⚗️ MELHORIAS E DESENVOLVIMENTO ⚗️
+    habilidadesFeiticos: [
+        // Array de objetos: { nome: "Lumos", nivel: 1, descricao: "Cria luz..." }
+    ],
+    // Para "Materiais Adquiridos" e "Conquistas", podemos usar o inventário e um log de eventos/missões.
+
+    // 📦 Inventário 🛒
+    galeoes: 50, // Moeda inicial padrão
+    inventario: [
+        // Array de objetos: { itemNome: "Varinha Simples", quantidade: 1, tipo: "Varinha", descricao: "Varinha inicial padrão." }
+        // Ou { itemNome: "Livro de Feitiços Ano 1", quantidade: 1, tipo: "Livro" }
+    ],
+
+    // 🐾 DESEMPENHO E EVOLUÇÃO DE PETS 🐾
+    pet: null, // Objeto ou null se não tiver. Se puder ter mais de um, seria um array.
+    // Exemplo de objeto pet:
+    // pet: {
+    //     nomePet: "Corujita",
+    //     especieRaca: "Coruja Comum",
+    //     nivelPet: 1, // Ou afeto, conforme seu PDF
+    //     afetoPet: 0,
+    //     personalidadePet: "Curiosa",
+    //     habilidadesPet: ["Entrega de pequenas mensagens"]
+    // },
+
+    // Aptidões em Matérias (conforme seu PDF, escolhe 3 ao criar)
+    aptidoesMaterias: [], // Array de strings, ex: ["Defesa Contra as Artes das Trevas", "Poções"]
+    
+    // Log de Missões/Eventos para "Conquistas Importantes"
+    logConquistas: [
+        // { data: "DD/MM/AAAA", tipo: "Missão", descricao: "Completou 'O Mistério do Diário Desaparecido'", recompensa: "50 XP, 10 Galeões"}
+    ],
+
+    // ✎ NOTAÇÕES DO DM/ADM ✎
+    notacoesDM: "" // Um campo de texto livre ou um array de notas
+};
+
+
 const app = express();
 // Aumenta o limite do corpo da requisição para o caso de webhooks com muitos dados ou mídias
 app.use(bodyParser.json({ limit: '50mb' })); 
