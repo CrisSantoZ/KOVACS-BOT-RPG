@@ -5,18 +5,16 @@ const {
     DisconnectReason,
     Browsers,
     fetchLatestBaileysVersion,
-    makeInMemoryStore // Para um armazenamento simples em memória, pode ajudar em alguns ambientes
+    makeInMemoryStore
 } = require('@whiskeysockets/baileys');
 const P = require('pino');
 const qrcode = require('qrcode-terminal');
 
-// Configuração do logger - Mude para 'trace' para o máximo de detalhes se necessário
-const logger = P({ level: process.env.LOG_LEVEL || 'debug' }); // Use a variável de ambiente ou 'debug'
+const logger = P({ level: process.env.LOG_LEVEL || 'debug' });
 
-// Armazenamento em memória simples. O Render tem disco persistente para useMultiFileAuthState,
-// mas ter um store pode ajudar em alguns cenários de conexão.
+// CRIE O STORE AQUI FORA
 const store = makeInMemoryStore({ logger: logger.child({ level: 'silent', stream: 'store' }) });
-store?.bind(sock.ev); // O 'sock' será definido abaixo
+// MAS NÃO FAÇA O BIND AINDA
 
 async function connectToWhatsApp() {
     console.log('Iniciando connectToWhatsApp...');
@@ -24,27 +22,24 @@ async function connectToWhatsApp() {
     const { version, isLatest } = await fetchLatestBaileysVersion();
     console.log(`Usando Baileys v${version.join('.')} (${isLatest ? 'é a mais recente' : 'NÃO é a mais recente'})`);
 
-    const sock = makeWASocket({
+    const sock = makeWASocket({ // <--- sock é definido AQUI
         version,
-        logger, // Use o logger configurado
-        printQRInTerminal: false, // Definitivamente false para priorizar código
-        browser: Browsers.ubuntu('Chrome'), // Tentar simular Chrome no Ubuntu
+        logger,
+        printQRInTerminal: false,
+        browser: Browsers.ubuntu('Chrome'),
         auth: state,
         generateHighQualityLinkPreview: true,
-        // Timeout de conexão - pode precisar ajustar
-        connectTimeoutMs: 60000, // 60 segundos
-        // Mantenha a conexão ativa (pode ajudar em plataformas PaaS)
-        keepAliveIntervalMs: 20000, // Envia um ping a cada 20 segundos
-        // Se houver um store, binde os eventos a ele
-        // getMessage: async key => {
-        // return (store.loadMessage(key.remoteJid, key.id) || store.loadMessage(key.remoteJid, key.id))?.message || undefined;
+        connectTimeoutMs: 60000,
+        keepAliveIntervalMs: 20000,
+        // getMessage: async key => { // Descomente e ajuste se for usar o store para mensagens
+        //    return (store.get ବା Message(key.remoteJid, key.id))?.message;
         // }
     });
 
-    // Binda o store aos eventos do socket (se estiver usando)
+    // FAÇA O BIND DO STORE AO SOCKET AQUI, DEPOIS QUE 'sock' EXISTE
     store?.bind(sock.ev);
 
-    // Lógica de pareamento com código
+    // Lógica de pareamento com código (continua como antes)
     if (!sock.authState.creds.me && !sock.authState.creds.registered) {
         const phoneNumber = process.env.MY_PHONE_NUMBER;
         if (phoneNumber && /^\d+$/.test(phoneNumber.replace(/[+()\s-]/g, ''))) {
@@ -58,15 +53,18 @@ async function connectToWhatsApp() {
             } catch (error) {
                 console.error('ERRO AO SOLICITAR CÓDIGO DE PAREAMENTO:', error);
                 console.log('Verifique os logs detalhados. Tentando fallback para QR Code (se habilitado)...');
-                sock.ws.config.printQRInTerminal = true; // Habilita QR como fallback
+                sock.ws.config.printQRInTerminal = true;
             }
         } else {
-            console.error('MY_PHONE_NUMBER não definida ou inválida. Habilitando QR Code como fallback.');
+            console.error('MY_PHONE_NUMBER não definida ou inválida nas variáveis de ambiente.');
+            console.log('Tentando fallback para QR Code...');
             sock.ws.config.printQRInTerminal = true;
         }
     }
 
+    // Evento connection.update (continua como antes)
     sock.ev.on('connection.update', async (update) => {
+        // ... (código do connection.update como na versão anterior)
         const { connection, lastDisconnect, qr, receivedPendingNotifications } = update;
         logger.info({ update }, 'Evento connection.update recebido');
 
@@ -80,10 +78,10 @@ async function connectToWhatsApp() {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             const shouldReconnect = 
                 statusCode !== DisconnectReason.loggedOut &&
-                statusCode !== DisconnectReason.connectionClosed && // Se fechada por nós ou outra instância
+                statusCode !== DisconnectReason.connectionClosed &&
                 statusCode !== DisconnectReason.connectionReplaced &&
-                statusCode !== DisconnectReason.badSession && // Sessão inválida, não adianta reconectar
-                statusCode !== DisconnectReason.timedOut; // Timeout pode precisar de nova tentativa manual
+                statusCode !== DisconnectReason.badSession &&
+                statusCode !== DisconnectReason.timedOut; 
 
             logger.error({ error: lastDisconnect?.error, statusCode }, `Conexão fechada. Reconectar: ${shouldReconnect}`);
 
@@ -92,12 +90,9 @@ async function connectToWhatsApp() {
                 connectToWhatsApp();
             } else if (shouldReconnect) {
                 logger.info('Tentando reconectar...');
-                // Adicionar um pequeno delay antes de reconectar pode ajudar
-                setTimeout(connectToWhatsApp, 5000); // Tenta reconectar após 5 segundos
+                setTimeout(connectToWhatsApp, 5000); 
             } else if (statusCode === DisconnectReason.loggedOut) {
                 logger.fatal("DESCONECTADO PERMANENTEMENTE (loggedOut). Delete 'auth_info_baileys_render' e reinicie o deploy.");
-                // No Render, você pode precisar ir em "Disks" e limpar o disco se a pasta não for recriada automaticamente.
-                // Ou simplesmente fazer um novo deploy que criará uma nova instância de disco.
             } else {
                 logger.warn(`Não foi possível reconectar automaticamente. Status: ${statusCode}.`);
             }
@@ -105,15 +100,16 @@ async function connectToWhatsApp() {
             console.log('************************************************');
             console.log('>>> CONEXÃO ABERTA E BEM-SUCEDIDA (Baileys) <<<');
             console.log('************************************************');
-            // console.log('Meus dados de login:', sock.authState.creds.me);
             if(receivedPendingNotifications) {
                 logger.info('Notificações pendentes recebidas/sincronizadas.');
             }
         }
     });
 
+    // Evento creds.update (continua como antes)
     sock.ev.on('creds.update', saveCreds);
 
+    // Evento messages.upsert (continua como antes, com seu !ping baileys etc.)
     sock.ev.on('messages.upsert', async (m) => {
         const msg = m.messages[0];
         if (!msg.key.fromMe && m.type === 'notify') {
@@ -133,17 +129,14 @@ async function connectToWhatsApp() {
         }
     });
 
-    return sock; // Retorna o socket para referência se necessário
+    return sock;
 }
 
-// Inicia a conexão
+// Inicia a conexão (continua como antes)
 (async () => {
     try {
         await connectToWhatsApp();
     } catch (err) {
         logger.fatal(err, "ERRO CRÍTICO AO INICIAR connectToWhatsApp");
-        // Em um ambiente de servidor, você pode querer que o processo saia para ser reiniciado pelo gerenciador (ex: PM2, Docker, Render)
-        // process.exit(1); // Descomente se quiser que o processo morra em caso de erro fatal na inicialização
     }
 })();
-                
