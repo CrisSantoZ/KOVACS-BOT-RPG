@@ -834,7 +834,7 @@ app.post('/webhook/whatsapp', async (req, res) => {
                                     `Inventário de [NOME_PERSONAGEM_ALVO] atualizado.`, 
                                     "Uso: `!admindelitem <ID_ALVO> <nome>[;qtd]`");
                                 break;
-                            case 'adminsetattr':
+                                                        case 'adminsetattr':
                                 await handleAdminSetAtributo(chatId, args);
                                 break;
                             case 'adminaddpontosattr':
@@ -843,26 +843,26 @@ app.post('/webhook/whatsapp', async (req, res) => {
                             default:
                                 await enviarMensagemTextoWhapi(chatId, `Comando de Admin "!${comando}" não reconhecido.`);
                                 break;
-                        }
+                        } // Fecha o switch(comando) dentro do else if (isOwner)
                     } else {
                         // Jogador permitido tentou um comando não listado para ele ou um comando de admin
                         await enviarMensagemTextoWhapi(chatId, `Comando "!${comando}" não reconhecido ou você não tem permissão para usá-lo.`);
                     }
-                } else if (textContent) {
+                } else if (textContent) { // Início do else if (textContent)
                     // Mensagens normais
                     if (isOwner) {
                          console.log(`[Webhook] Texto normal recebido do Proprietário ${senderName}: "${textContent}"`);
                     } else if (isJogadorPermitido) {
                          console.log(`[Webhook] Texto normal recebido do Jogador Permitido ${senderName}: "${textContent}"`);
                     }
-                }
+                } // Fim do else if (textContent)
             } // Fim do loop for (const messageData of req.body.messages)
-        } else {
+        } else { // Início do else para if (req.body.messages ...)
             console.log("[Webhook] Estrutura inesperada ou sem mensagens:", req.body);
-        }
-    } catch (error) {
+        } // Fim do else
+    } catch (error) { // Início do catch
         console.error("Erro CRÍTICO ao processar webhook do Whapi:", error.message, error.stack);
-    }
+    } // Fim do catch
     res.status(200).send('OK');
 }); // Fim do app.post('/webhook/whatsapp')
 
@@ -923,5 +923,3 @@ async function desligamentoGracioso(signal) {
 }
 process.on('SIGTERM', () => desligamentoGracioso('SIGTERM'));
 process.on('SIGINT', () => desligamentoGracioso('SIGINT'));
-                
-    
