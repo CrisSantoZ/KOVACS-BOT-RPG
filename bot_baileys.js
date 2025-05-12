@@ -98,48 +98,55 @@ if (!WHAPI_API_TOKEN) {
 }
 
 // ----- INÍCIO DA LÓGICA DO SEU RPG (Exemplos) -----
-// Você vai expandir isso MUITO!
-let personagens = {}; // Em um bot real, isso viria de um arquivo JSON ou banco de dados
+// (Mantenha a definição de 'let todasAsFichas = {};' aqui em cima)
 
-function processarComandoRPG(chatId, remetente, comandoCompleto) {
-    const args = comandoCompleto.split(' ');
-    const comandoBase = args[0].toLowerCase();
+// ADICIONE AS FUNÇÕES COMPLETAS handleCriarFicha e handleVerFicha AQUI
+// (Vou omitir as definições delas aqui para não repetir o código imenso,
+// mas elas devem estar definidas no seu arquivo, como na minha resposta anterior)
+async function handleCriarFicha(chatIdParaResposta, idRemetente, nomeDoRemetenteNoZap, argsComando) {
+    // ... (código completo da função handleCriarFicha que te passei)
+}
 
-    console.log(`Comando RPG recebido de ${remetente} no chat ${chatId}: ${comandoBase} com args: ${args.slice(1)}`);
+async function handleVerFicha(chatIdParaResposta, idRemetente) {
+    // ... (código completo da função handleVerFicha que te passei)
+}
 
-    if (comandoBase === '!ficha') {
-        // Lógica para buscar e mostrar a ficha do personagem 'remetente'
-        // Exemplo: const ficha = personagens[remetente];
-        // if (ficha) { enviarMensagemTextoWhapi(chatId, `Ficha de ${ficha.nome}: ...`); }
-        // else { enviarMensagemTextoWhapi(chatId, `Personagem não encontrado.`); }
-        enviarMensagemTextoWhapi(chatId, `Comando !ficha recebido para ${remetente}. Lógica da ficha a ser implementada.`);
-        return;
+
+// ESTA É A FUNÇÃO QUE VOCÊ PRECISA ATUALIZAR:
+function processarComandoRPG(chatId, remetente, nomeDoRemetenteNoZap, comandoCompleto) { // Adicionei nomeDoRemetenteNoZap
+    const argsComandoOriginal = comandoCompleto.slice(1).trim(); // Pega tudo depois do '!'
+    const comandoArgsArray = argsComandoOriginal.split(/ +/g);
+    const comandoBase = comandoArgsArray.shift().toLowerCase();
+    // 'args' para handleCriarFicha deve ser o array de strings após o comando, que a função vai juntar e splitar por ';'
+    // Para outros comandos, pode ser argsComandoOriginal ou argsComandoArray dependendo do que a função espera
+
+    console.log(`Processando Comando RPG: '!${comandoBase}', De: ${nomeDoRemetenteNoZap} (${remetente}) no Chat: ${chatId}, Args originais: "${argsComandoOriginal}"`);
+
+    if (comandoBase === 'criar' || comandoBase === 'novaficha' || comandoBase === 'criarpersonagem') {
+        // Passa o array de argumentos que foi splitado por espaço.
+        // A função handleCriarFicha vai juntar e re-splitar por ';'.
+        handleCriarFicha(chatId, remetente, nomeDoRemetenteNoZap, comandoArgsArray); // CHAMANDO A FUNÇÃO REAL
+    } else if (comandoBase === 'ficha' || comandoBase === 'minhaficha') {
+        handleVerFicha(chatId, remetente); // CHAMANDO A FUNÇÃO REAL
     }
-
-    if (comandoBase === '!testeimagem') {
-        // Exemplo de como você poderia gerar e enviar uma imagem com canvas no futuro
-        /*
-        const canvas = Canvas.createCanvas(200, 100);
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = 'blue';
-        ctx.fillRect(0, 0, 200, 100);
-        ctx.font = 'bold 20px Arial';
-        ctx.fillStyle = 'white';
-        ctx.textAlign = 'center';
-        ctx.fillText('Teste Canvas!', 100, 55);
-        const buffer = canvas.toBuffer('image/png');
-        enviarImagemWhapi(chatId, buffer, 'Teste de Imagem do Bot'); // Você precisará criar enviarImagemWhapi
-        */
-        enviarMensagemTextoWhapi(chatId, `Comando !testeimagem recebido. Lógica do canvas a ser implementada.`);
-        return;
+    // Adicione outros 'else if' para mais comandos aqui
+    // else if (comandoBase === 'testeimagem') {
+    //    enviarMensagemTextoWhapi(chatId, `Comando !testeimagem recebido. Lógica do canvas a ser implementada.`);
+    // }
+    else {
+        enviarMensagemTextoWhapi(chatId, `Comando de RPG "!${comandoBase}" ainda não implementado, ${nomeDoRemetenteNoZap}.`);
     }
-
-    // Adicione outros comandos do RPG aqui
-    // enviarMensagemTextoWhapi(chatId, `Comando RPG "${comandoBase}" ainda não implementado.`);
 }
 
 // ----- FIM DA LÓGICA DO SEU RPG (Exemplos) -----
 
+// DENTRO DO SEU WEBHOOK app.post('/webhook/whatsapp', ...)
+// A chamada para processarComandoRPG deve ser assim:
+// else if (textContent && textContent.startsWith('!')) {
+//     // 'sender' é o ID do remetente (ex: numero@s.whatsapp.net)
+//     // 'nomeRemetenteNoZap' é o nome do perfil do WhatsApp do remetente (que pegamos de messageData.from_name)
+//     processarComandoRPG(chatId, sender, nomeRemetenteNoZap, textContent); // Passa textContent inteiro
+// }
 
 // Endpoint de Webhook: O Whapi.Cloud enviará as mensagens recebidas para cá
 app.post('/webhook/whatsapp', async (req, res) => {
