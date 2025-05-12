@@ -1,0 +1,24 @@
+// package.json
+{
+  "name": "meu-bot-baileys", // Pode ser o nome da sua pasta
+  "version": "1.0.0",
+  "description": "Bot de RPG Harry Potter com Baileys",
+  "main": "bot_baileys.js", // Arquivo principal do seu bot
+  "scripts": {
+    "start": "node bot_baileys.js", // Comando para iniciar o bot na hospedagem
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "baileys",
+    "rpg"
+  ],
+  "author": "Seu Nome", // Coloque seu nome/nick
+  "license": "ISC",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.2", // Use a versão que foi instalada ou a mais recente
+    "pino": "^8.15.0", // Exemplo de versão, use a que foi instalada
+    "qrcode-terminal": "^0.12.0" // Exemplo de versão
+  }
+}
