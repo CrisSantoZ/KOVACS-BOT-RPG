@@ -4,14 +4,14 @@
   "description": "Bot de RPG Harry Potter usando Whapi.Cloud e Render",
   "main": "bot_server.js",
   "scripts": {
-    "start": "node bot_server.js"
+    "start": "node bot_server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Seu Nome",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.19.2",  
-    "axios": "^1.7.2",     
-    "body-parser": "^1.20.2" 
-    "canvas": "^2.11.2" 
+    "express": "^4.19.2",
+    "axios": "^1.7.2",
+    "body-parser": "^1.20.2"
   }
 }
