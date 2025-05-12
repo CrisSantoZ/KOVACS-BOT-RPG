@@ -2,9 +2,9 @@
   "name": "meu-rpg-bot-whapi",
   "version": "1.0.0",
   "description": "Bot de RPG Harry Potter usando Whapi.Cloud e Render",
-  "main": "bot_server.js",
+  "main": "bot_baileys.js",
   "scripts": {
-    "start": "node bot_server.js",
+    "start": "node bot_baileys.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Seu Nome",
