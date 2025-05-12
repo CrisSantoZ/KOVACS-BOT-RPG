@@ -313,13 +313,18 @@ app.post('/webhook/whatsapp', async (req, res) => {
                 }
 
                 // --- VERIFICAÇÃO DO PROPRIETÁRIO ---
+                console.log(`[DEBUG] Verificando proprietário:`);
+                console.log(`[DEBUG] Conteúdo de OWNER_ID (lido do env): '${OWNER_ID}' (Tipo: ${typeof OWNER_ID})`);
+                console.log(`[DEBUG] Conteúdo de sender (messageData.from): '${sender}' (Tipo: ${typeof sender})`);
+                console.log(`[DEBUG] Comparação (sender !== OWNER_ID): ${sender !== OWNER_ID}`);
+
                 if (OWNER_ID && sender !== OWNER_ID) {
                     console.log(`[Webhook] Usuário ${senderName} (${sender}) não é o proprietário. Comando ignorado.`);
-                    // Não envia resposta para economizar cota. Apenas loga.
                     continue; // Pula para a próxima mensagem
                 }
                 // --- FIM DA VERIFICAÇÃO DO PROPRIETÁRIO ---
-
+            
+                
                 // Se chegou aqui, é o proprietário quem enviou
                 if (textContent && textContent.startsWith('!')) {
                     const args = textContent.slice(1).trim().split(/ +/g);
