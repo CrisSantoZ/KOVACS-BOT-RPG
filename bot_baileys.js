@@ -9,8 +9,8 @@ const path = require('path');
 
 // --- MODELO DA FICHA DE PERSONAGEM ---
 const fichaModelo = {
-    idJogador: "", 
-    nomeJogadorSalvo: "", 
+    idJogador: "",
+    nomeJogadorSalvo: "",
     nomePersonagem: "N/A",
     idadePersonagem: 11,
     casa: "A Ser Definida",
@@ -19,7 +19,7 @@ const fichaModelo = {
     ultimaAtualizacao: "",
     nivelAtual: 1,
     xpAtual: 0,
-    xpProximoNivel: 100, 
+    xpProximoNivel: 100,
     pontosDeVidaMax: 100,
     pontosDeVidaAtual: 100,
     pontosDeMagiaMax: 50,
@@ -27,41 +27,67 @@ const fichaModelo = {
     atributos: {
         inteligencia: 5, forca: 5, constituicao: 5,
         destreza: 5, carisma: 5, agilidade: 5,
-        pontosParaDistribuir: 0
+        pontosParaDistribuir: 5 // Começa com 5 pontos para distribuir
     },
     galeoes: 50,
-    habilidadesFeiticos: [], 
+    habilidadesFeiticos: [],
     inventario: [
         { itemNome: "Varinha Comum", quantidade: 1, tipo: "Varinha", descricao: "Uma varinha simples, mas funcional." },
         { itemNome: "Uniforme de Hogwarts", quantidade: 1, tipo: "Vestimenta" },
         { itemNome: "Kit de Livros do Primeiro Ano", quantidade: 1, tipo: "Livro" }
-    ], 
-    pet: null, 
-    aptidoesMaterias: [], 
+    ],
+    pet: null,
+    aptidoesMaterias: [],
     logConquistas: [],
     notacoesDM: ""
 };
 
+// --- LISTA DE COMANDOS PARA O COMANDO !comandos ---
+const listaDeComandos = [
+    { nome: "!ping", desc: "Verifica se o bot está online." },
+    { nome: "!criar", desc: "`!criar Nome;Casa;Idade;[Carreira]` - Cria um novo personagem." },
+    { nome: "!ficha", desc: "Mostra sua ficha de personagem atual." },
+    { nome: "!comandos", desc: "Mostra esta lista de comandos." },
+    // Comandos de Atualização
+    { nome: "!setnome", desc: "`!setnome <novo nome>` - Altera o nome do seu personagem." },
+    { nome: "!setidade", desc: "`!setidade <nova idade>` - Altera a idade do seu personagem (11-18)." },
+    { nome: "!setcasa", desc: "`!setcasa <nova casa>` - Altera a casa (Grifinória, Sonserina, Corvinal, Lufa-Lufa)." },
+    { nome: "!setcarreira", desc: "`!setcarreira <nova carreira>` - Altera a carreira do seu personagem." },
+    { nome: "!setatributo", desc: "`!setatributo <atributo> <valor>` - Define um atributo (ex: !setatributo inteligencia 10)." },
+    { nome: "!additem", desc: "`!additem Nome;[Qtd];[Tipo];[Desc]` - Adiciona item ao inventário (separado por ';')." },
+    { nome: "!addfeitico", desc: "`!addfeitico Nome;[Nivel]` - Adiciona feitiço/habilidade (separado por ';')." },
+    { nome: "!setxp", desc: "`!setxp <valor>` - Define seu XP atual." },
+    { nome: "!sethp", desc: "`!sethp <atual>;[max]` - Define seus Pontos de Vida (separado por ';')." },
+    { nome: "!setmp", desc: "`!setmp <atual>;[max]` - Define seus Pontos de Magia (separado por ';')." },
+    { nome: "!setgaleoes", desc: "`!setgaleoes <valor>` - Define sua quantidade de Galeões." },
+    // Adicionar mais comandos aqui conforme necessário
+];
+
+
 // --- CONFIGURAÇÃO DE ARMAZENAMENTO DE DADOS (FICHAS) ---
-const BASE_PERSISTENT_DISK_PATH = process.env.RENDER_DISK_MOUNT_PATH || '/data/rpg_files';
-const DADOS_RPG_DIR = path.join(BASE_PERSISTENT_DISK_PATH, 'kovacs_bot_rpg_data_final');
+const BASE_PERSISTENT_DISK_PATH = process.env.RENDER_DISK_MOUNT_PATH || './kovacs_bot_data'; // Alterado fallback para local
+const DADOS_RPG_DIR = path.join(BASE_PERSISTENT_DISK_PATH); // Simplificado, usar o mount path diretamente se fornecido
 const ARQUIVO_FICHAS_PATH = path.join(DADOS_RPG_DIR, 'fichas_personagens.json');
 
-let todasAsFichas = {}; 
+let todasAsFichas = {};
 
 function garantirDiretorioDeDados() {
     try {
-        if (!fs.existsSync(DADOS_RPG_DIR)) {
-            fs.mkdirSync(DADOS_RPG_DIR, { recursive: true });
-            console.log(`Diretório de dados RPG criado/verificado em: ${DADOS_RPG_DIR}`);
+        // Verifica se o diretório base (ou o fallback local) existe. Não tenta criar /data/rpg_files se não for montado.
+        const dirParaVerificar = path.dirname(ARQUIVO_FICHAS_PATH);
+        if (!fs.existsSync(dirParaVerificar)) {
+            fs.mkdirSync(dirParaVerificar, { recursive: true });
+            console.log(`Diretório de dados RPG criado/verificado em: ${dirParaVerificar}`);
+        } else {
+            console.log(`Diretório de dados RPG já existe em: ${dirParaVerificar}`);
         }
     } catch (err) {
-        console.error(`Erro crítico ao verificar/criar diretório de dados RPG (${DADOS_RPG_DIR}):`, err);
+        console.error(`Erro crítico ao verificar/criar diretório de dados RPG (${path.dirname(ARQUIVO_FICHAS_PATH)}):`, err);
     }
 }
 
 function carregarFichas() {
-    garantirDiretorioDeDados(); 
+    garantirDiretorioDeDados();
     try {
         if (fs.existsSync(ARQUIVO_FICHAS_PATH)) {
             const data = fs.readFileSync(ARQUIVO_FICHAS_PATH, 'utf8');
@@ -78,19 +104,34 @@ function carregarFichas() {
         }
     } catch (error) {
         console.error(`Erro ao carregar/parsear fichas de ${ARQUIVO_FICHAS_PATH}:`, error);
-        todasAsFichas = {}; 
+        todasAsFichas = {};
     }
 }
 
 function salvarFichas() {
-    garantirDiretorioDeDados(); 
+    garantirDiretorioDeDados();
     try {
-        const data = JSON.stringify(todasAsFichas, null, 2); 
+        const data = JSON.stringify(todasAsFichas, null, 2);
         fs.writeFileSync(ARQUIVO_FICHAS_PATH, data, 'utf8');
         console.log("Fichas salvas com sucesso em:", ARQUIVO_FICHAS_PATH);
     } catch (error) {
         console.error("Erro ao salvar fichas em", ARQUIVO_FICHAS_PATH, ":", error);
     }
+}
+
+// --- FUNÇÕES AUXILIARES ---
+function getFichaOuAvisa(chatIdParaResposta, idRemetente) {
+    const ficha = todasAsFichas[idRemetente];
+    if (!ficha) {
+        enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Você ainda não tem um personagem. Use o comando `!criar` primeiro.");
+        return null;
+    }
+    return ficha;
+}
+
+function atualizarTimestampESalvar(ficha) {
+    ficha.ultimaAtualizacao = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+    salvarFichas();
 }
 
 // --- CONFIGURAÇÃO DO SERVIDOR EXPRESS ---
@@ -104,11 +145,11 @@ const WHAPI_BASE_URL = "https://gate.whapi.cloud";
 
 if (!WHAPI_API_TOKEN) {
     console.error("FATAL_ERROR: Variável de ambiente WHAPI_API_TOKEN não está definida no Render!");
+    // Considerar encerrar o processo se o token for essencial: process.exit(1);
 }
 
 // --- FUNÇÕES DE COMANDO DO RPG ---
 
-// (handleCriarFicha e handleVerFicha como definidas anteriormente)
 async function handleCriarFicha(chatIdParaResposta, idRemetente, nomeDoRemetenteNoZap, argsComando) {
     const dadosComando = argsComando.join(' ');
     const partes = dadosComando.split(';').map(p => p.trim());
@@ -129,7 +170,8 @@ async function handleCriarFicha(chatIdParaResposta, idRemetente, nomeDoRemetente
     }
 
     const casasValidas = ["grifinória", "sonserina", "corvinal", "lufa-lufa"];
-    if (!casasValidas.includes(casaInput.toLowerCase())) {
+    const casaNormalizada = casaInput.toLowerCase();
+    if (!casasValidas.includes(casaNormalizada)) {
         await enviarMensagemTextoWhapi(chatIdParaResposta, `Casa "${casaInput}" inválida. As casas são: Grifinória, Sonserina, Corvinal, Lufa-Lufa.`);
         return;
     }
@@ -140,30 +182,30 @@ async function handleCriarFicha(chatIdParaResposta, idRemetente, nomeDoRemetente
     }
     const anoCalculado = Math.max(1, Math.min(7, idadeInput - 10));
 
-    let novaFicha = JSON.parse(JSON.stringify(fichaModelo)); 
-    
+    let novaFicha = JSON.parse(JSON.stringify(fichaModelo));
+
     novaFicha.idJogador = idRemetente;
     novaFicha.nomeJogadorSalvo = nomeDoRemetenteNoZap || idRemetente.split('@')[0];
     novaFicha.nomePersonagem = nomePersonagemInput;
     novaFicha.idadePersonagem = idadeInput;
-    novaFicha.casa = casaInput.charAt(0).toUpperCase() + casaInput.slice(1).toLowerCase();
+    novaFicha.casa = casaInput.charAt(0).toUpperCase() + casaInput.slice(1).toLowerCase(); // Mantem a capitalização
     novaFicha.anoEmHogwarts = anoCalculado;
     novaFicha.carreira = carreiraInput;
     novaFicha.ultimaAtualizacao = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
-    
-    todasAsFichas[idRemetente] = novaFicha;
-    salvarFichas();
+    // Garante que a estrutura de atributos existe
+    novaFicha.atributos = { ...fichaModelo.atributos };
+    novaFicha.atributos.pontosParaDistribuir = 5; // Adiciona pontos iniciais
 
-    await enviarMensagemTextoWhapi(chatIdParaResposta, `🎉 Personagem ${nomePersonagemInput} da casa ${novaFicha.casa}, ano ${novaFicha.anoEmHogwarts}, foi criado para você!\nUse \`!ficha\` para ver os detalhes.`);
+    todasAsFichas[idRemetente] = novaFicha;
+    salvarFichas(); // Salva a ficha recém-criada
+
+    await enviarMensagemTextoWhapi(chatIdParaResposta, `🎉 Personagem ${nomePersonagemInput} da casa ${novaFicha.casa}, ano ${novaFicha.anoEmHogwarts}, foi criado para você!\nVocê tem ${novaFicha.atributos.pontosParaDistribuir} pontos de atributo para distribuir.\nUse \`!ficha\` para ver os detalhes.`);
 }
 
 async function handleVerFicha(chatIdParaResposta, idRemetente) {
-    const ficha = todasAsFichas[idRemetente];
-    if (!ficha) {
-        await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Você ainda não tem um personagem. Use o comando `!criar Nome; Casa; Idade; [Carreira]` para criar um.");
-        return;
-    }
-    // ... (código completo da função handleVerFicha que te passei, com toda a formatação)
+    const ficha = getFichaOuAvisa(chatIdParaResposta, idRemetente);
+    if (!ficha) return;
+
     let resposta = `🌟 --- Ficha de ${ficha.nomePersonagem} --- 🌟\n`;
     if (ficha.nomeJogadorSalvo) resposta += `🧙‍♂️ Jogador: ${ficha.nomeJogadorSalvo}\n`;
     resposta += `📜 Nome Personagem: ${ficha.nomePersonagem}\n`;
@@ -174,26 +216,41 @@ async function handleVerFicha(chatIdParaResposta, idRemetente) {
     resposta += `❤️ HP: ${ficha.pontosDeVidaAtual}/${ficha.pontosDeVidaMax}\n`;
     resposta += `🔮 MP: ${ficha.pontosDeMagiaAtual}/${ficha.pontosDeMagiaMax}\n`;
     resposta += `💰 Galeões: ${ficha.galeoes}G\n`;
+
     resposta += "\n🧠 Atributos:\n";
     if (ficha.atributos) {
-        for (const [attr, valor] of Object.entries(ficha.atributos)) {
-            const nomeAttr = attr.charAt(0).toUpperCase() + attr.slice(1);
-            if (attr !== "pontosParaDistribuir") {
-                resposta += `  ☆ ${nomeAttr}: ${valor}\n`;
+        const ordemAtributos = ["inteligencia", "forca", "constituicao", "destreza", "carisma", "agilidade"];
+        ordemAtributos.forEach(attr => {
+            if (ficha.atributos.hasOwnProperty(attr)) {
+                 const nomeAttr = attr.charAt(0).toUpperCase() + attr.slice(1);
+                 resposta += `  ☆ ${nomeAttr}: ${ficha.atributos[attr]}\n`;
             }
-        }
+        });
         if (ficha.atributos.pontosParaDistribuir > 0) {
-            resposta += `  ✨ Você tem ${ficha.atributos.pontosParaDistribuir} pontos para distribuir (!usaratributo).\n`;
+            resposta += `  ✨ Você tem ${ficha.atributos.pontosParaDistribuir} pontos para distribuir (!usaratributo - *ainda não implementado*).\n`;
         }
-    } else { resposta += "  (Atributos não definidos)\n"; }
+    } else {
+        resposta += "  (Atributos não definidos)\n";
+    }
+
     resposta += "\n📜 Feitiços:\n";
     if (ficha.habilidadesFeiticos && ficha.habilidadesFeiticos.length > 0) {
-        ficha.habilidadesFeiticos.forEach(f => { resposta += `  ☆ ${f.nome} (Nvl ${f.nivel || 1})\n`; });
-    } else { resposta += "  (Nenhum)\n"; }
+        ficha.habilidadesFeiticos.forEach(f => {
+            resposta += `  ☆ ${f.nome} ${f.nivel ? '(Nvl ' + f.nivel + ')' : ''}\n`;
+        });
+    } else {
+        resposta += "  (Nenhum)\n";
+    }
+
     resposta += "\n🎒 Inventário:\n";
     if (ficha.inventario && ficha.inventario.length > 0) {
-        ficha.inventario.forEach(i => { resposta += `  ☆ ${i.itemNome} (Qtd: ${i.quantidade || 1}) ${i.descricao ? '- ' + i.descricao : ''}\n`; });
-    } else { resposta += "  (Vazio)\n"; }
+        ficha.inventario.forEach(i => {
+            resposta += `  ☆ ${i.itemNome} (Qtd: ${i.quantidade || 1}) ${i.tipo ? '[' + i.tipo + ']': ''} ${i.descricao ? '- ' + i.descricao : ''}\n`;
+        });
+    } else {
+        resposta += "  (Vazio)\n";
+    }
+
     if (ficha.pet) {
         resposta += "\n🐾 Pet:\n";
         resposta += `  ☆ Nome: ${ficha.pet.nomePet || 'N/A'}\n`;
@@ -203,175 +260,199 @@ async function handleVerFicha(chatIdParaResposta, idRemetente) {
             resposta += `  ☆ Habilidades: ${ficha.pet.habilidadesPet.join(', ')}\n`;
         }
     }
+
     resposta += `\n🕒 Última atualização: ${ficha.ultimaAtualizacao || 'N/A'}\n`;
+
     await enviarMensagemTextoWhapi(chatIdParaResposta, resposta);
 }
 
-// --- NOVAS FUNÇÕES DE ATUALIZAÇÃO ---
-async function handleAddXP(chatIdParaResposta, idRemetente, argsComando) {
-    const ficha = todasAsFichas[idRemetente];
-    if (!ficha) { await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Personagem não encontrado."); return; }
-    if (argsComando.length < 1) { await enviarMensagemTextoWhapi(chatIdParaResposta, "Uso: `!addxp <quantidade>`"); return; }
-    const quantidadeXP = parseInt(argsComando[0]);
-    if (isNaN(quantidadeXP)) { await enviarMensagemTextoWhapi(chatIdParaResposta, "Quantidade de XP inválida."); return; }
-
-    ficha.xpAtual += quantidadeXP;
-    let mensagemResposta = `✨ Você ${quantidadeXP >= 0 ? 'ganhou' : 'perdeu'} ${Math.abs(quantidadeXP)} XP! Seu XP atual é ${ficha.xpAtual}/${ficha.xpProximoNivel}.`;
-
-    // Lógica de Subir de Nível (Exemplo Simples)
-    while (ficha.xpAtual >= ficha.xpProximoNivel) {
-        ficha.nivelAtual += 1;
-        ficha.xpAtual -= ficha.xpProximoNivel; 
-        ficha.xpProximoNivel = Math.floor(ficha.xpProximoNivel * 1.5); 
-        ficha.atributos.pontosParaDistribuir = (ficha.atributos.pontosParaDistribuir || 0) + 3; 
-        ficha.pontosDeVidaMax += 10; 
-        ficha.pontosDeVidaAtual = ficha.pontosDeVidaMax; 
-        ficha.pontosDeMagiaMax += 5;  
-        ficha.pontosDeMagiaAtual = ficha.pontosDeMagiaMax; 
-        mensagemResposta += `\n🎉 PARABÉNS! Você subiu para o Nível ${ficha.nivelAtual}! 🎉`;
-        mensagemResposta += `\nXP para o próximo nível: ${ficha.xpProximoNivel}.`;
-        mensagemResposta += `\nVocê ganhou 3 pontos de atributo para distribuir com \`!usaratributo\`.`;
-        mensagemResposta += `\nSeu HP e MP foram restaurados e aumentados!`;
-    }
-    ficha.ultimaAtualizacao = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
-    salvarFichas();
-    await enviarMensagemTextoWhapi(chatIdParaResposta, mensagemResposta);
+async function handleListarComandos(chatIdParaResposta) {
+    let resposta = "📜 --- Comandos Disponíveis --- 📜\n\n";
+    listaDeComandos.forEach(cmd => {
+        resposta += `🔹 ${cmd.nome}: ${cmd.desc}\n`;
+    });
+    await enviarMensagemTextoWhapi(chatIdParaResposta, resposta);
 }
 
-async function handleUsarAtributo(chatIdParaResposta, idRemetente, argsComando) {
-    const ficha = todasAsFichas[idRemetente];
-    if (!ficha) { await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Personagem não encontrado."); return; }
-    if (argsComando.length < 2) { await enviarMensagemTextoWhapi(chatIdParaResposta, "Uso: `!usaratributo <nome_do_atributo> <quantidade>`"); return; }
-    
-    const atributoNomeInput = argsComando[0].toLowerCase();
-    const quantidadePontos = parseInt(argsComando[1]);
+// --- FUNÇÕES HANDLER PARA NOVOS COMANDOS DE ATUALIZAÇÃO ---
 
-    if (isNaN(quantidadePontos) || quantidadePontos <= 0) { await enviarMensagemTextoWhapi(chatIdParaResposta, "Quantidade de pontos inválida."); return; }
-    if (!ficha.atributos.pontosParaDistribuir || ficha.atributos.pontosParaDistribuir < quantidadePontos) {
-        await enviarMensagemTextoWhapi(chatIdParaResposta, `Você não tem ${quantidadePontos} pontos para distribuir. Pontos disponíveis: ${ficha.atributos.pontosParaDistribuir || 0}.`);
+async function handleSetNome(chatIdParaResposta, idRemetente, argsComando) {
+    const ficha = getFichaOuAvisa(chatIdParaResposta, idRemetente);
+    if (!ficha) return;
+
+    const novoNome = argsComando.join(' ');
+    if (!novoNome) {
+        await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Nome inválido. Uso: `!setnome <novo nome do personagem>`");
         return;
     }
-    const mapaAtributos = {"inteligencia": "inteligencia", "int": "inteligencia", "forca": "forca", "for": "forca", "constituicao": "constituicao", "con": "constituicao", "destreza": "destreza", "des": "destreza", "carisma": "carisma", "car": "carisma", "agilidade": "agilidade", "agi": "agilidade"};
-    const atributoReal = mapaAtributos[atributoNomeInput];
-    if (!atributoReal || typeof ficha.atributos[atributoReal] === 'undefined') {
-        await enviarMensagemTextoWhapi(chatIdParaResposta, `Atributo "${atributoNomeInput}" inválido. Use: inteligencia, forca, constituicao, destreza, carisma, agilidade.`);
-        return;
-    }
-    ficha.atributos[atributoReal] += quantidadePontos;
-    ficha.atributos.pontosParaDistribuir -= quantidadePontos;
-    // Adicionar lógica de recalcular HP/MP se necessário
-    ficha.ultimaAtualizacao = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
-    salvarFichas();
-    await enviarMensagemTextoWhapi(chatIdParaResposta, `✨ Atributo ${atributoReal.charAt(0).toUpperCase() + atributoReal.slice(1)} aumentado para ${ficha.atributos[atributoReal]}! Pontos restantes: ${ficha.atributos.pontosParaDistribuir}.`);
+
+    const nomeAntigo = ficha.nomePersonagem;
+    ficha.nomePersonagem = novoNome;
+    atualizarTimestampESalvar(ficha);
+    await enviarMensagemTextoWhapi(chatIdParaResposta, `✅ Nome do personagem alterado de "${nomeAntigo}" para "${novoNome}".`);
 }
 
-async function handleAddGaleoes(chatIdParaResposta, idRemetente, argsComando) {
-    const ficha = todasAsFichas[idRemetente];
-    if (!ficha) { await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Personagem não encontrado."); return; }
-    if (argsComando.length < 1) { await enviarMensagemTextoWhapi(chatIdParaResposta, "Uso: `!addgaleoes <quantidade>`"); return; }
-    const quantidade = parseInt(argsComando[0]);
-    if (isNaN(quantidade)) { await enviarMensagemTextoWhapi(chatIdParaResposta, "Quantidade inválida."); return; }
-    ficha.galeoes = (ficha.galeoes || 0) + quantidade;
-    ficha.ultimaAtualizacao = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
-    salvarFichas();
-    await enviarMensagemTextoWhapi(chatIdParaResposta, `💰 ${quantidade > 0 ? quantidade + ' Galeões adicionados.' : Math.abs(quantidade) + ' Galeões removidos.'} Saldo atual: ${ficha.galeoes}G.`);
+async function handleSetIdade(chatIdParaResposta, idRemetente, argsComando) {
+    const ficha = getFichaOuAvisa(chatIdParaResposta, idRemetente);
+    if (!ficha) return;
+
+    const novaIdade = parseInt(argsComando[0]);
+    if (isNaN(novaIdade) || novaIdade < 11 || novaIdade > 18) {
+        await enviarMensagemTextoWhapi(chatIdParaResposta, `❌ Idade inválida (${argsComando[0]}). Deve ser um número entre 11 e 18.`);
+        return;
+    }
+
+    const idadeAntiga = ficha.idadePersonagem;
+    const anoAntigo = ficha.anoEmHogwarts;
+    ficha.idadePersonagem = novaIdade;
+    ficha.anoEmHogwarts = Math.max(1, Math.min(7, novaIdade - 10)); // Recalcula ano
+    atualizarTimestampESalvar(ficha);
+    await enviarMensagemTextoWhapi(chatIdParaResposta, `✅ Idade alterada de ${idadeAntiga} para ${novaIdade}. Ano em Hogwarts atualizado para ${ficha.anoEmHogwarts} (era ${anoAntigo}).`);
+}
+
+async function handleSetCasa(chatIdParaResposta, idRemetente, argsComando) {
+    const ficha = getFichaOuAvisa(chatIdParaResposta, idRemetente);
+    if (!ficha) return;
+
+    const novaCasaInput = argsComando.join(' ');
+    if (!novaCasaInput) {
+         await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Nenhuma casa fornecida. Uso: `!setcasa <nome da casa>`");
+         return;
+    }
+
+    const casasValidas = ["grifinória", "sonserina", "corvinal", "lufa-lufa"];
+    const casaNormalizada = novaCasaInput.toLowerCase();
+
+    if (!casasValidas.includes(casaNormalizada)) {
+        await enviarMensagemTextoWhapi(chatIdParaResposta, `❌ Casa "${novaCasaInput}" inválida. Casas permitidas: Grifinória, Sonserina, Corvinal, Lufa-Lufa.`);
+        return;
+    }
+
+    const casaAntiga = ficha.casa;
+    ficha.casa = novaCasaInput.charAt(0).toUpperCase() + novaCasaInput.slice(1).toLowerCase(); // Capitaliza
+    atualizarTimestampESalvar(ficha);
+    await enviarMensagemTextoWhapi(chatIdParaResposta, `✅ Casa alterada de "${casaAntiga}" para "${ficha.casa}".`);
+}
+
+async function handleSetCarreira(chatIdParaResposta, idRemetente, argsComando) {
+    const ficha = getFichaOuAvisa(chatIdParaResposta, idRemetente);
+    if (!ficha) return;
+
+    const novaCarreira = argsComando.join(' ');
+    if (!novaCarreira) {
+        await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Carreira inválida. Uso: `!setcarreira <nova carreira>`");
+        return;
+    }
+
+    const carreiraAntiga = ficha.carreira;
+    ficha.carreira = novaCarreira;
+    atualizarTimestampESalvar(ficha);
+    await enviarMensagemTextoWhapi(chatIdParaResposta, `✅ Carreira alterada de "${carreiraAntiga}" para "${novaCarreira}".`);
+}
+
+async function handleSetAtributo(chatIdParaResposta, idRemetente, argsComando) {
+    const ficha = getFichaOuAvisa(chatIdParaResposta, idRemetente);
+    if (!ficha) return;
+
+    if (argsComando.length < 2) {
+        await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Uso incorreto. Formato: `!setatributo <nome_atributo> <valor>`\nAtributos: inteligencia, forca, constituicao, destreza, carisma, agilidade");
+        return;
+    }
+
+    const atributoNome = argsComando[0].toLowerCase();
+    const valorInput = parseInt(argsComando[1]);
+
+    if (!ficha.atributos || !ficha.atributos.hasOwnProperty(atributoNome) || atributoNome === "pontosparadistribuir") {
+        await enviarMensagemTextoWhapi(chatIdParaResposta, `❌ Atributo "${atributoNome}" inválido ou não pode ser definido diretamente.`);
+        return;
+    }
+
+    if (isNaN(valorInput) || valorInput < 0) {
+         await enviarMensagemTextoWhapi(chatIdParaResposta, `❌ Valor "${argsComando[1]}" inválido. Deve ser um número positivo.`);
+        return;
+    }
+
+    const valorAntigo = ficha.atributos[atributoNome];
+    ficha.atributos[atributoNome] = valorInput;
+    atualizarTimestampESalvar(ficha);
+    await enviarMensagemTextoWhapi(chatIdParaResposta, `✅ Atributo ${atributoNome.charAt(0).toUpperCase() + atributoNome.slice(1)} definido para ${valorInput} (era ${valorAntigo}).`);
 }
 
 async function handleAddItem(chatIdParaResposta, idRemetente, argsComando) {
-    const ficha = todasAsFichas[idRemetente];
-    if (!ficha) { await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Personagem não encontrado."); return; }
-    const dadosComando = argsComando.join(' ');
-    const partes = dadosComando.split(';').map(p => p.trim());
-    if (partes.length < 1) { await enviarMensagemTextoWhapi(chatIdParaResposta, "Uso: `!additem <Nome do Item>; [Qtd]; [Tipo]; [Desc]`"); return; }
+    const ficha = getFichaOuAvisa(chatIdParaResposta, idRemetente);
+    if (!ficha) return;
+
+    const inputCompleto = argsComando.join(' ');
+    const partes = inputCompleto.split(';').map(p => p.trim());
 
     const nomeItem = partes[0];
-    const quantidade = parseInt(partes[1]) || 1;
-    const tipoItem = partes[2] || "Item";
-    const descricaoItem = partes[3] || "";
-    if (isNaN(quantidade) || quantidade <= 0) { await enviarMensagemTextoWhapi(chatIdParaResposta, "Quantidade inválida."); return; }
-
-    let itemExistente = ficha.inventario.find(item => item.itemNome.toLowerCase() === nomeItem.toLowerCase() && (item.tipo || "Item").toLowerCase() === tipoItem.toLowerCase());
-    if (itemExistente) {
-        itemExistente.quantidade = (itemExistente.quantidade || 0) + quantidade;
-    } else {
-        ficha.inventario.push({ itemNome: nomeItem, quantidade: quantidade, tipo: tipoItem, descricao: descricaoItem });
-    }
-    ficha.ultimaAtualizacao = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
-    salvarFichas();
-    await enviarMensagemTextoWhapi(chatIdParaResposta, `🎒 ${quantidade}x "${nomeItem}" adicionado(s) ao inventário!`);
-}
-
-async function handleRemoverItem(chatIdParaResposta, idRemetente, argsComando) {
-    const ficha = todasAsFichas[idRemetente];
-    if (!ficha) { await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Personagem não encontrado."); return; }
-    const dadosComando = argsComando.join(' ');
-    const partes = dadosComando.split(';').map(p => p.trim());
-    if (partes.length < 1) { await enviarMensagemTextoWhapi(chatIdParaResposta, "Uso: `!removeritem <Nome do Item>; [Quantidade]`"); return; }
-
-    const nomeItem = partes[0];
-    const quantidadeRemover = parseInt(partes[1]) || 1;
-    if (isNaN(quantidadeRemover) || quantidadeRemover <= 0) { await enviarMensagemTextoWhapi(chatIdParaResposta, "Quantidade inválida."); return; }
-
-    const itemIndex = ficha.inventario.findIndex(item => item.itemNome.toLowerCase() === nomeItem.toLowerCase());
-    if (itemIndex === -1) { await enviarMensagemTextoWhapi(chatIdParaResposta, `Item "${nomeItem}" não encontrado no inventário.`); return; }
-    
-    if (ficha.inventario[itemIndex].quantidade < quantidadeRemover) {
-        await enviarMensagemTextoWhapi(chatIdParaResposta, `Você não tem ${quantidadeRemover} "${nomeItem}". Você possui ${ficha.inventario[itemIndex].quantidade}.`);
+    if (!nomeItem) {
+        await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Nome do item é obrigatório. Uso: `!additem NomeItem;[Qtd];[Tipo];[Desc]`");
         return;
     }
-    ficha.inventario[itemIndex].quantidade -= quantidadeRemover;
-    if (ficha.inventario[itemIndex].quantidade <= 0) {
-        ficha.inventario.splice(itemIndex, 1); // Remove o item se a quantidade for zero ou menor
-    }
-    ficha.ultimaAtualizacao = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
-    salvarFichas();
-    await enviarMensagemTextoWhapi(chatIdParaResposta, `🗑️ ${quantidadeRemover}x "${nomeItem}" removido(s) do inventário.`);
+
+    const quantidade = parseInt(partes[1]) || 1;
+    const tipo = partes[2] || "Item";
+    const descricao = partes[3] || "";
+
+    if (!ficha.inventario) ficha.inventario = []; // Garante que o inventário exista
+
+    // Opcional: verificar se item já existe e somar quantidade? Por ora, adiciona como novo.
+    const novoItem = {
+        itemNome: nomeItem,
+        quantidade: quantidade,
+        tipo: tipo,
+        descricao: descricao
+    };
+
+    ficha.inventario.push(novoItem);
+    atualizarTimestampESalvar(ficha);
+    await enviarMensagemTextoWhapi(chatIdParaResposta, `✅ Item "${nomeItem}" (Qtd: ${quantidade}) adicionado ao inventário.`);
 }
 
-async function handleAprenderFeitico(chatIdParaResposta, idRemetente, argsComando) {
-    const ficha = todasAsFichas[idRemetente];
-    if (!ficha) { await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Personagem não encontrado."); return; }
-    const dadosComando = argsComando.join(' ');
-    const partes = dadosComando.split(';').map(p => p.trim());
-    if (partes.length < 1) { await enviarMensagemTextoWhapi(chatIdParaResposta, "Uso: `!aprenderfeitico <Nome do Feitiço>; [Nível opcional]`"); return; }
+async function handleAddFeitico(chatIdParaResposta, idRemetente, argsComando) {
+    const ficha = getFichaOuAvisa(chatIdParaResposta, idRemetente);
+    if (!ficha) return;
+
+    const inputCompleto = argsComando.join(' ');
+    const partes = inputCompleto.split(';').map(p => p.trim());
 
     const nomeFeitico = partes[0];
-    const nivelFeitico = parseInt(partes[1]) || 1;
-    if (isNaN(nivelFeitico) || nivelFeitico <= 0) { await enviarMensagemTextoWhapi(chatIdParaResposta, "Nível do feitiço inválido."); return; }
-
-    if (ficha.habilidadesFeiticos.find(f => f.nome.toLowerCase() === nomeFeitico.toLowerCase())) {
-        await enviarMensagemTextoWhapi(chatIdParaResposta, `Você já conhece o feitiço "${nomeFeitico}".`);
+    if (!nomeFeitico) {
+        await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Nome do feitiço é obrigatório. Uso: `!addfeitico NomeFeitico;[Nivel]`");
         return;
     }
-    ficha.habilidadesFeiticos.push({ nome: nomeFeitico, nivel: nivelFeitico });
-    ficha.ultimaAtualizacao = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
-    salvarFichas();
-    await enviarMensagemTextoWhapi(chatIdParaResposta, `📜 Feitiço "${nomeFeitico}" (Nível ${nivelFeitico}) aprendido!`);
+
+    const nivel = parseInt(partes[1]) || 1;
+
+    if (!ficha.habilidadesFeiticos) ficha.habilidadesFeiticos = []; // Garante que a lista exista
+
+    const novoFeitico = {
+        nome: nomeFeitico,
+        nivel: nivel
+    };
+
+    ficha.habilidadesFeiticos.push(novoFeitico);
+    atualizarTimestampESalvar(ficha);
+    await enviarMensagemTextoWhapi(chatIdParaResposta, `✅ Feitiço "${nomeFeitico}" (Nível ${nivel}) adicionado.`);
 }
 
-async function handleComandos(chatIdParaResposta) {
-    let msg = "📜 --- Lista de Comandos Disponíveis --- 📜\n\n";
-    msg += "👤 *Personagem:*\n";
-    msg += "`!criar <Nome>;<Casa>;<Idade>;[Carreira]` - Cria sua ficha.\n";
-    msg += "`!ficha` ou `!minhaficha` - Mostra sua ficha.\n";
-    msg += "\n✨ *Evolução:*\n";
-    msg += "`!addxp <quantidade>` - Adiciona XP a você.\n";
-    msg += "`!usaratributo <atributo> <pontos>` - Distribui pontos de atributo.\n";
-    msg += "\n💰 *Finanças:*\n";
-    msg += "`!addgaleoes <quantidade>` - Adiciona Galeões.\n";
-    msg += "`!removergaleoes <quantidade>` - Remove Galeões.\n";
-    msg += "\n🎒 *Inventário:*\n";
-    msg += "`!additem <Nome>;[Qtd];[Tipo];[Desc]` - Adiciona item.\n";
-    msg += "`!removeritem <Nome>;[Qtd]` - Remove item.\n";
-    msg += "\n🪄 *Magia:*\n";
-    msg += "`!aprenderfeitico <Nome>;[Nível]` - Aprende feitiço.\n";
-    // Adicionar mais comandos à medida que são implementados
-    msg += "\nℹ️ *Outros:*\n";
-    msg += "`!ping` - Testa se o bot está online.\n";
-    msg += "`!comandos` - Mostra esta lista.\n\n";
-    msg += "_Obs: Para comandos com múltiplos parâmetros, use ';' para separar as partes (ex: !criar Nome Completo; Casa; Idade)._";
-    await enviarMensagemTextoWhapi(chatIdParaResposta, msg);
+async function handleSetXP(chatIdParaResposta, idRemetente, argsComando) {
+    const ficha = getFichaOuAvisa(chatIdParaResposta, idRemetente);
+    if (!ficha) return;
+
+    const novoXP = parseInt(argsComando[0]);
+    if (isNaN(novoXP) || novoXP < 0) {
+        await enviarMensagemTextoWhapi(chatIdParaResposta, `❌ Valor de XP "${argsComando[0]}" inválido. Deve ser um número positivo.`);
+        return;
+    }
+
+    const xpAntigo = ficha.xpAtual;
+    ficha.xpAtual = novoXP;
+    // Adicionar lógica de Level Up aqui se desejar
+    atualizarTimestampESalvar(ficha);
+    await enviarMensagemTextoWhapi(chatIdParaResposta, `✅ XP atual definido para ${novoXP} (era ${xpAntigo}).`);
 }
 
-
-// --- FUNÇÃO PARA ENVIAR
+async function handleSetHP(chatIdParaResposta, idRemetente, argsComando) {
+    const ficha = getFichaOuAvisa(chatIdPara
