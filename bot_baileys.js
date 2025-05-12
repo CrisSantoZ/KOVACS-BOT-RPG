@@ -784,31 +784,24 @@ app.post('/webhook/whatsapp', async (req, res) => {
                     let preLog = isOwner ? "[Proprietário]" : (isJogadorPermitido ? "[Jogador Permitido]" : "[NÃO AUTORIZADO]");
                     console.log(`[Webhook] ${preLog} COMANDO: '!${comando}' | Args: [${args.join(', ')}] | De: ${senderName} (${sender}) | Chat: ${chatId}`);
 
-                    if ((comando === 'ping') && (isOwner || isJogadorPermitido)) {
+                    // Comandos permitidos para TODOS (Owner E Jogadores Permitidos)
+                    if (comando === 'ping') { // Removido && (isOwner || isJogadorPermitido) pois a checagem geral já foi feita
                         await enviarMensagemTextoWhapi(chatId, `Pong! Olá, ${senderName}! Estou funcionando! 🧙✨`);
-                    } else if (comando === 'criar' && (isOwner || isJogadorPermitido)) {
+                    } else if (comando === 'criar') { // Removido && (isOwner || isJogadorPermitido)
                         await handleCriarFicha(chatId, sender, senderName, args);
-                    } else if ((comando === 'ficha' || comando === 'minhaficha' || comando === 'verficha') && (isOwner || isJogadorPermitido)) {
+                    } else if (comando === 'ficha' || comando === 'minhaficha' || comando === 'verficha') { // Removido && (isOwner || isJogadorPermitido)
                         if (isOwner && args.length > 0 && comando !== 'minhaficha') {
-                            await handleVerFicha(chatId, sender, args); 
+                            await handleVerFicha(chatId, sender, args); // Owner vendo ficha de outro
                         } else {
-                            await handleVerFicha(chatId, sender, []); 
+                            await handleVerFicha(chatId, sender, []); // Jogador vendo a própria ficha (ou owner vendo a própria)
                         }
-                    } else if (comando === 'addxp' && (isOwner || isJogadorPermitido)) {
-                        await handleAddXP(chatId, sender, args);
-                    } else if (comando === 'setnivel' && (isOwner || isJogadorPermitido)) {
-                        await handleSetNivel(chatId, sender, args);
-                    } else if (comando === 'addgaleoes' && (isOwner || isJogadorPermitido)) {
-                        await handleAddGaleoes(chatId, sender, args);
-                    } else if (comando === 'additem' && (isOwner || isJogadorPermitido)) {
-                        await handleAddItem(chatId, sender, args);
-                    } else if (comando === 'delitem' && (isOwner || isJogadorPermitido)) {
-                        await handleDelItem(chatId, sender, args);
-                    } else if ((comando === 'comandos' || comando === 'help') && (isOwner || isJogadorPermitido)) {
-                        await handleComandos(chatId, isOwner);
+                    } else if (comando === 'comandos' || comando === 'help') { // Removido && (isOwner || isJogadorPermitido)
+                        await handleComandos(chatId, isOwner); // Mostra comandos de acordo com o nível de acesso
                     }
-                    else if (isOwner) { // INÍCIO DO BLOCO DE COMANDOS DO OWNER
-                        switch (comando) { // INÍCIO DO SWITCH DO OWNER
+                    // Comandos EXCLUSIVOS DO OWNER ou para o OWNER editar A PRÓPRIA FICHA
+                    else if (isOwner) {
+                        switch (comando) {
+                            // Comandos de admin para gerenciar fichas de outros
                             case 'admincriar':
                                 await handleAdminCriarFicha(chatId, sender, args);
                                 break;
@@ -817,7 +810,7 @@ app.post('/webhook/whatsapp', async (req, res) => {
                                     `XP de [NOME_PERSONAGEM_ALVO] atualizado.`, 
                                     "Uso: `!adminaddxp <ID_ALVO> <valor>`");
                                 break;
-                            case 'adminsetnivel': // ESTA É A LINHA QUE O ERRO APONTA (ou próxima)
+                            case 'adminsetnivel':
                                 await handleAdminComandoFicha(chatId, args, 'setnivel', modificarNivel,
                                     `Nível de [NOME_PERSONAGEM_ALVO] atualizado.`,
                                     "Uso: `!adminsetnivel <ID_ALVO> <nível>`");
@@ -843,35 +836,51 @@ app.post('/webhook/whatsapp', async (req, res) => {
                             case 'adminaddpontosattr':
                                 await handleAdminAddPontosAtributo(chatId, args);
                                 break;
-                            default:
-                                await enviarMensagemTextoWhapi(chatId, `Comando de Admin "!${comando}" não reconhecido.`);
+                            // Comandos para o OWNER modificar A PRÓPRIA FICHA
+                            case 'addxp':
+                                await handleAddXP(chatId, sender, args);
                                 break;
-                        } // FIM DO SWITCH DO OWNER
+                            case 'setnivel':
+                                await handleSetNivel(chatId, sender, args);
+                                break;
+                            case 'addgaleoes':
+                                await handleAddGaleoes(chatId, sender, args);
+                                break;
+                            case 'additem':
+                                await handleAddItem(chatId, sender, args);
+                                break;
+                            case 'delitem':
+                                await handleDelItem(chatId, sender, args);
+                                break;
+                            default:
+                                await enviarMensagemTextoWhapi(chatId, `Comando "!${comando}" (possivelmente de Admin) não reconhecido.`);
+                                break;
+                        }
                     } else {
-                        // Jogador permitido tentou um comando não listado para ele ou um comando de admin
-                        await enviarMensagemTextoWhapi(chatId, `Comando "!${comando}" não reconhecido ou você não tem permissão para usá-lo.`);
-                    } // FIM DO ELSE IF (isOwner) / else (jogador permitido)
-                } else if (textContent) { // INÍCIO DO ELSE IF (textContent) - para mensagens normais
+                        // Se chegou aqui, é um Jogador Permitido tentando um comando que não é 'ping', 'criar', 'ficha', ou 'comandos'
+                        await enviarMensagemTextoWhapi(chatId, `Comando "!${comando}" não reconhecido ou você não tem permissão para usá-lo, ${senderName}.`);
+                    }
+                } else if (textContent) {
                     // Mensagens normais
                     if (isOwner) {
                          console.log(`[Webhook] Texto normal recebido do Proprietário ${senderName}: "${textContent}"`);
                     } else if (isJogadorPermitido) {
                          console.log(`[Webhook] Texto normal recebido do Jogador Permitido ${senderName}: "${textContent}"`);
                     }
-                } // FIM DO ELSE IF (textContent)
-            } // FIM DO LOOP for (const messageData of req.body.messages)
-        } else { // INÍCIO DO ELSE para if (req.body.messages ...)
+                }
+            } // Fim do loop for (const messageData of req.body.messages)
+        } else {
             console.log("[Webhook] Estrutura inesperada ou sem mensagens:", req.body);
-        } // FIM DO ELSE
-    } catch (error) { // INÍCIO DO CATCH
+        }
+    } catch (error) {
         console.error("Erro CRÍTICO ao processar webhook do Whapi:", error.message, error.stack);
-    } // FIM DO CATCH
+    }
     res.status(200).send('OK');
-}); // FIM DO app.post('/webhook/whatsapp')
+}); // Fim do app.post('/webhook/whatsapp')
 
 // --- ROTA DE TESTE E INICIALIZAÇÃO DO SERVIDOR ---
 app.get('/', (req, res) => {
-    res.send('Servidor do Bot de RPG (Whapi no Render com MongoDB - Multiuser Prep V1) está operacional!');
+    res.send('Servidor do Bot de RPG (Whapi no Render com MongoDB - Multiuser Prep V1 - Final Fix) está operacional!');
 });
 
 async function iniciarServidor() {
@@ -926,4 +935,3 @@ async function desligamentoGracioso(signal) {
 }
 process.on('SIGTERM', () => desligamentoGracioso('SIGTERM'));
 process.on('SIGINT', () => desligamentoGracioso('SIGINT'));
-
