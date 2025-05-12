@@ -1,15 +1,16 @@
-// Nome do arquivo: bot_server.js
+// Nome do arquivo: bot_baileys.js
 
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
-// const fs = require('fs'); // Não vamos mais usar 'fs' para fichas
-// const path = require('path'); // Não vamos mais usar 'path' para fichas
 const { MongoClient, ObjectId } = require('mongodb'); // Importa o MongoClient e ObjectId
 
-// --- MODELO DA FICHA DE PERSONAGEM (sem alterações) ---
+// --- CONFIGURAÇÃO DE AMBIENTE E IDs ---
+const OWNER_ID = process.env.OWNER_ID; // Pega o ID do proprietário da variável de ambiente
+
+// --- MODELO DA FICHA DE PERSONAGEM ---
 const fichaModelo = {
-    // idJogador será o _id no MongoDB
+    // idJogador (que será o _id no MongoDB, não precisa mais do campo idJogador aqui)
     nomeJogadorSalvo: "",
     nomePersonagem: "N/A",
     idadePersonagem: 11,
@@ -44,17 +45,21 @@ const fichaModelo = {
 
 // --- CONFIGURAÇÃO DO MONGODB ---
 const MONGODB_URI = process.env.MONGODB_URI;
-const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'rpg_harry_potter_db'; // Use a var de ambiente ou um padrão
+const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'rpg_harry_potter_db';
 const MONGODB_FICHAS_COLLECTION = process.env.MONGODB_FICHAS_COLLECTION || 'fichas_personagens';
 
 if (!MONGODB_URI) {
     console.error("--- ERRO FATAL: Variável de ambiente MONGODB_URI não definida! ---");
-    process.exit(1); // Encerra se não puder conectar ao DB
+    process.exit(1);
 }
+if (!OWNER_ID) {
+    console.warn("--- ALERTA: Variável de ambiente OWNER_ID não definida! O bot pode não ter restrição de proprietário. ---");
+}
+
 
 let dbClient;
 let fichasCollection;
-let todasAsFichas = {}; // Continuaremos usando uma cópia em memória para acesso rápido
+let todasAsFichas = {}; // Cache em memória
 
 // Função para conectar ao MongoDB
 async function conectarMongoDB() {
@@ -67,7 +72,7 @@ async function conectarMongoDB() {
         console.log("Conectado com sucesso ao MongoDB Atlas e à coleção:", MONGODB_FICHAS_COLLECTION);
     } catch (error) {
         console.error("ERRO CRÍTICO ao conectar ao MongoDB:", error);
-        process.exit(1); // Encerra se a conexão inicial falhar
+        process.exit(1);
     }
 }
 
@@ -80,26 +85,18 @@ async function carregarFichasDoDB() {
     console.log("Carregando fichas do MongoDB para a memória...");
     try {
         const fichasDoDB = await fichasCollection.find({}).toArray();
-        todasAsFichas = {}; // Limpa o cache em memória
+        todasAsFichas = {};
         fichasDoDB.forEach(fichaDB => {
-            // O _id do MongoDB é o idJogador. Convertemos para string se for ObjectId.
             const idJogador = fichaDB._id.toString();
-            todasAsFichas[idJogador] = { ...fichaDB }; // Adiciona ao cache em memória
-            // Não precisamos mais do campo _id dentro do objeto da ficha em memória,
-            // pois a chave do objeto 'todasAsFichas' já é o idJogador.
-            // Mas não há problema em manter se não quiser remover.
-            // delete todasAsFichas[idJogador]._id; // Opcional
+            todasAsFichas[idJogador] = { ...fichaDB };
         });
         console.log(`${Object.keys(todasAsFichas).length} fichas carregadas do DB para a memória.`);
     } catch (error) {
         console.error("Erro ao carregar fichas do MongoDB:", error);
-        // Decide se o bot deve continuar rodando com fichas em memória vazias ou parar.
-        // Por enquanto, continua com o que estiver em memória (que foi zerado).
     }
 }
 
 // Função para salvar/atualizar UMA ficha no MongoDB
-// O idJogador será usado como o _id no MongoDB
 async function salvarFichaNoDB(idJogador, fichaData) {
     if (!fichasCollection) {
         console.error("Coleção de fichas não inicializada. Salvamento abortado para jogador:", idJogador);
@@ -107,16 +104,11 @@ async function salvarFichaNoDB(idJogador, fichaData) {
     }
     console.log(`Salvando/Atualizando ficha para jogador ${idJogador} no MongoDB...`);
     try {
-        // Prepara os dados para o MongoDB, usando idJogador como _id
         const fichaParaSalvar = { ...fichaData };
-        // Não precisamos mais do campo idJogador dentro do objeto, pois ele será o _id.
-        // Mas se fichaModelo ainda tem idJogador, pode deixar ou remover.
-        // delete fichaParaSalvar.idJogador; // Removido de fichaModelo
-
         await fichasCollection.updateOne(
-            { _id: idJogador }, // Critério de busca: o _id é o idJogador
-            { $set: fichaParaSalvar }, // Dados a serem atualizados/inseridos
-            { upsert: true } // Opção: se não encontrar, insere um novo documento
+            { _id: idJogador },
+            { $set: fichaParaSalvar },
+            { upsert: true }
         );
         console.log(`Ficha para ${idJogador} salva com sucesso no MongoDB.`);
     } catch (error) {
@@ -124,7 +116,7 @@ async function salvarFichaNoDB(idJogador, fichaData) {
     }
 }
 
-// --- CONFIGURAÇÃO DO SERVIDOR EXPRESS (sem grandes alterações) ---
+// --- CONFIGURAÇÃO DO SERVIDOR EXPRESS ---
 const app = express();
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
@@ -147,17 +139,12 @@ async function handleCriarFicha(chatIdParaResposta, idRemetente, nomeDoRemetente
         return;
     }
 
-    // idRemetente (ex: "55119... @c.us") será o _id no MongoDB
     const idJogador = idRemetente;
 
-    if (todasAsFichas[idJogador]) { // Verifica no cache em memória
+    if (todasAsFichas[idJogador]) {
         await enviarMensagemTextoWhapi(chatIdParaResposta, `Você já possui um personagem: ${todasAsFichas[idJogador].nomePersonagem}. Por enquanto, apenas um personagem por jogador.`);
         return;
     }
-    // Poderia adicionar uma verificação no DB aqui também por segurança, mas o cache deve ser confiável
-    // const fichaExistenteDB = await fichasCollection.findOne({ _id: idJogador });
-    // if (fichaExistenteDB) { /* ... */ }
-
 
     const nomePersonagemInput = partes[0];
     const casaInput = partes[1];
@@ -176,9 +163,8 @@ async function handleCriarFicha(chatIdParaResposta, idRemetente, nomeDoRemetente
     }
     const anoCalculado = Math.max(1, Math.min(7, idadeInput - 10));
 
-    let novaFicha = JSON.parse(JSON.stringify(fichaModelo)); // Cria uma cópia profunda
+    let novaFicha = JSON.parse(JSON.stringify(fichaModelo));
 
-    // Removido: novaFicha.idJogador = idJogador; // O idJogador será o _id do documento no MongoDB
     novaFicha.nomeJogadorSalvo = nomeDoRemetenteNoZap || idJogador.split('@')[0];
     novaFicha.nomePersonagem = nomePersonagemInput;
     novaFicha.idadePersonagem = idadeInput;
@@ -187,23 +173,22 @@ async function handleCriarFicha(chatIdParaResposta, idRemetente, nomeDoRemetente
     novaFicha.carreira = carreiraInput;
     novaFicha.ultimaAtualizacao = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
-    todasAsFichas[idJogador] = novaFicha; // Adiciona ao cache em memória
-    await salvarFichaNoDB(idJogador, novaFicha); // Salva no MongoDB
+    todasAsFichas[idJogador] = novaFicha;
+    await salvarFichaNoDB(idJogador, novaFicha);
 
     await enviarMensagemTextoWhapi(chatIdParaResposta, `🎉 Personagem ${nomePersonagemInput} da casa ${novaFicha.casa}, ano ${novaFicha.anoEmHogwarts}, foi criado para você!\nUse \`!ficha\` para ver os detalhes.`);
 }
 
 async function handleVerFicha(chatIdParaResposta, idRemetente) {
     const idJogador = idRemetente;
-    // Tenta pegar do cache em memória primeiro
     let ficha = todasAsFichas[idJogador];
 
-    if (!ficha && fichasCollection) { // Se não estiver no cache, tenta carregar do DB (backup)
+    if (!ficha && fichasCollection) {
         console.log(`Ficha para ${idJogador} não encontrada no cache, tentando buscar no DB...`);
         try {
             const fichaDB = await fichasCollection.findOne({ _id: idJogador });
             if (fichaDB) {
-                todasAsFichas[idJogador] = { ...fichaDB }; // Atualiza o cache
+                todasAsFichas[idJogador] = { ...fichaDB };
                 ficha = todasAsFichas[idJogador];
                 console.log(`Ficha para ${idJogador} carregada do DB para o cache.`);
             }
@@ -212,15 +197,12 @@ async function handleVerFicha(chatIdParaResposta, idRemetente) {
         }
     }
 
-
     if (!ficha) {
         await enviarMensagemTextoWhapi(chatIdParaResposta, "❌ Você ainda não tem um personagem. Use o comando `!criar Nome; Casa; Idade; [Carreira]` para criar um.");
         return;
     }
 
-    // A lógica de formatação da resposta da ficha permanece a mesma
     let resposta = `🌟 --- Ficha de ${ficha.nomePersonagem} --- 🌟\n`;
-    // ... (resto da formatação da ficha igual ao código anterior) ...
     if (ficha.nomeJogadorSalvo) resposta += `🧙‍♂️ Jogador: ${ficha.nomeJogadorSalvo}\n`;
     resposta += `📜 Nome Personagem: ${ficha.nomePersonagem}\n`;
     resposta += `🎂 Idade: ${ficha.idadePersonagem} (Ano: ${ficha.anoEmHogwarts})\n`;
@@ -230,7 +212,6 @@ async function handleVerFicha(chatIdParaResposta, idRemetente) {
     resposta += `❤️ HP: ${ficha.pontosDeVidaAtual}/${ficha.pontosDeVidaMax}\n`;
     resposta += `🔮 MP: ${ficha.pontosDeMagiaAtual}/${ficha.pontosDeMagiaMax}\n`;
     resposta += `💰 Galeões: ${ficha.galeoes}G\n`;
-
     resposta += "\n🧠 Atributos:\n";
     if (ficha.atributos) {
         for (const [attr, valor] of Object.entries(ficha.atributos)) {
@@ -245,7 +226,6 @@ async function handleVerFicha(chatIdParaResposta, idRemetente) {
     } else {
         resposta += "  (Atributos não definidos)\n";
     }
-
     resposta += "\n📜 Feitiços:\n";
     if (ficha.habilidadesFeiticos && ficha.habilidadesFeiticos.length > 0) {
         ficha.habilidadesFeiticos.forEach(f => {
@@ -254,7 +234,6 @@ async function handleVerFicha(chatIdParaResposta, idRemetente) {
     } else {
         resposta += "  (Nenhum)\n";
     }
-
     resposta += "\n🎒 Inventário:\n";
     if (ficha.inventario && ficha.inventario.length > 0) {
         ficha.inventario.forEach(i => {
@@ -263,7 +242,6 @@ async function handleVerFicha(chatIdParaResposta, idRemetente) {
     } else {
         resposta += "  (Vazio)\n";
     }
-
     if (ficha.pet) {
         resposta += "\n🐾 Pet:\n";
         resposta += `  ☆ Nome: ${ficha.pet.nomePet || 'N/A'}\n`;
@@ -274,17 +252,15 @@ async function handleVerFicha(chatIdParaResposta, idRemetente) {
         }
     }
     resposta += `\n🕒 Última atualização: ${ficha.ultimaAtualizacao || 'N/A'}\n`;
-
     await enviarMensagemTextoWhapi(chatIdParaResposta, resposta);
 }
 
-// --- FUNÇÃO PARA ENVIAR MENSAGENS (sem alterações) ---
+// --- FUNÇÃO PARA ENVIAR MENSAGENS ---
 async function enviarMensagemTextoWhapi(para, mensagem) {
     if (!WHAPI_API_TOKEN) {
         console.error("Token do Whapi não configurado para envio.");
         return;
     }
-    // console.log(`Enviando mensagem de texto via Whapi para ${para}: "${mensagem}"`); // Log pode ser verboso
     const endpoint = "/messages/text";
     const urlDeEnvio = `${WHAPI_BASE_URL}${endpoint}`;
     const payload = { "to": para, "body": mensagem };
@@ -294,9 +270,7 @@ async function enviarMensagemTextoWhapi(para, mensagem) {
         'Accept': 'application/json'
     };
     try {
-        // console.log(`Enviando POST para ${urlDeEnvio} com payload: ${JSON.stringify(payload)}`);
-        const response = await axios.post(urlDeEnvio, payload, { headers: headers });
-        // console.log('Resposta do Whapi ao enviar mensagem TEXTO:', JSON.stringify(response.data, null, 2));
+        await axios.post(urlDeEnvio, payload, { headers: headers });
     } catch (error) {
         console.error('Erro ao enviar mensagem TEXTO pelo Whapi:');
         if (error.response) {
@@ -308,50 +282,75 @@ async function enviarMensagemTextoWhapi(para, mensagem) {
     }
 }
 
-// --- ROTA DE WEBHOOK (sem grandes alterações na lógica de comandos) ---
+// --- ROTA DE WEBHOOK ---
 app.post('/webhook/whatsapp', async (req, res) => {
     console.log('----------------------------------------------------');
     console.log('>>> Webhook do Whapi Recebido! <<<');
-    // ... (lógica do webhook igual ao código anterior, mas agora handleCriarFicha usa MongoDB)
+
     try {
         if (req.body.messages && Array.isArray(req.body.messages) && req.body.messages.length > 0) {
             for (const messageData of req.body.messages) {
                 const fromMe = messageData.from_me;
                 const chatId = messageData.chat_id;
-                const sender = messageData.from;
-                const nomeRemetenteNoZap = messageData.from_name || (sender ? sender.split('@')[0] : 'Desconhecido');
+                const sender = messageData.from; // ID completo do remetente (ex: 55... @c.us)
+                const senderName = messageData.from_name || (sender ? sender.split('@')[0] : 'Desconhecido');
                 const messageType = messageData.type;
                 let textContent = "";
 
                 if (messageType === 'text' && messageData.text && typeof messageData.text.body === 'string') {
-                    textContent = messageData.text.body;
+                    textContent = messageData.text.body.trim();
                 } else if (messageData.caption && typeof messageData.caption === 'string') {
-                    textContent = messageData.caption;
+                    textContent = messageData.caption.trim();
                 }
 
                 if (fromMe === true) {
+                    console.log(`[Webhook] Mensagem própria ignorada do chat ${chatId}.`);
                     continue;
                 }
                 if (!chatId) {
+                    console.warn("[Webhook] Mensagem sem 'chat_id' válido:", messageData);
                     continue;
                 }
 
+                // --- VERIFICAÇÃO DO PROPRIETÁRIO ---
+                if (OWNER_ID && sender !== OWNER_ID) {
+                    console.log(`[Webhook] Usuário ${senderName} (${sender}) não é o proprietário. Comando ignorado.`);
+                    // Não envia resposta para economizar cota. Apenas loga.
+                    continue; // Pula para a próxima mensagem
+                }
+                // --- FIM DA VERIFICAÇÃO DO PROPRIETÁRIO ---
+
+                // Se chegou aqui, é o proprietário quem enviou
                 if (textContent && textContent.startsWith('!')) {
                     const args = textContent.slice(1).trim().split(/ +/g);
                     const comando = args.shift().toLowerCase();
-                    console.log(`Comando RPG: '!${comando}', Args: [${args.join(', ')}], De: ${nomeRemetenteNoZap} (${sender}) no Chat: ${chatId}`);
 
-                    if (comando === 'ping') {
-                        await enviarMensagemTextoWhapi(chatId, `Pong do RPG MongoDB! Olá, ${nomeRemetenteNoZap}! 🧙✨`);
-                    } else if (comando === 'criar' || comando === 'novaficha' || comando === 'criarpersonagem') {
-                        await handleCriarFicha(chatId, sender, nomeRemetenteNoZap, args);
-                    } else if (comando === 'ficha' || comando === 'minhaficha') {
-                        await handleVerFicha(chatId, sender);
-                    } else {
-                        await enviarMensagemTextoWhapi(chatId, `Comando de RPG "!${comando}" não reconhecido, ${nomeRemetenteNoZap}.`);
+                    console.log(`[Webhook] COMANDO AUTORIZADO: '!${comando}' | De: ${senderName} (Proprietário) | Chat: ${chatId}`);
+
+                    switch (comando) {
+                        case 'ping':
+                            await enviarMensagemTextoWhapi(chatId, `Pong do Proprietário! Olá, ${senderName}! Tudo certo com o MongoDB! 🧙✨`);
+                            break;
+                        case 'criar':
+                        case 'novaficha':
+                        case 'criarpersonagem':
+                            await handleCriarFicha(chatId, sender, senderName, args);
+                            break;
+                        case 'ficha':
+                        case 'minhaficha':
+                            await handleVerFicha(chatId, sender);
+                            break;
+                        default:
+                            await enviarMensagemTextoWhapi(chatId, `Comando de RPG "!${comando}" não reconhecido, ${senderName}.`);
+                            break;
                     }
+                } else if (textContent) {
+                    console.log(`[Webhook] Texto normal recebido do Proprietário ${senderName}: "${textContent}"`);
+                    // Lógica para mensagens normais do proprietário (se houver)
                 }
             }
+        } else {
+            console.log("[Webhook] Estrutura inesperada ou sem mensagens:", req.body);
         }
     } catch (error) {
         console.error("Erro CRÍTICO ao processar webhook do Whapi:", error.message, error.stack);
@@ -361,35 +360,43 @@ app.post('/webhook/whatsapp', async (req, res) => {
 
 // --- ROTA DE TESTE E INICIALIZAÇÃO DO SERVIDOR ---
 app.get('/', (req, res) => {
-    res.send('Servidor do Bot de RPG (Whapi no Render com MongoDB) está operacional!');
+    res.send('Servidor do Bot de RPG (Whapi no Render com MongoDB - Owner Only) está operacional!');
 });
 
-// Função principal para iniciar o servidor e conectar ao DB
 async function iniciarServidor() {
-    await conectarMongoDB(); // Conecta ao DB primeiro
-    await carregarFichasDoDB(); // Carrega as fichas para a memória
+    await conectarMongoDB();
+    await carregarFichasDoDB();
 
     app.listen(PORT, () => {
-        console.log("----------------------------------------------------");
-        console.log("INICIANDO SERVIDOR DO BOT DE RPG com MongoDB...");
-        const publicUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+        console.log("****************************************************");
+        console.log("*** INICIANDO SERVIDOR DO BOT DE RPG HP - WHAPI ***");
+        console.log(`*** Data/Hora Início: ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} ***`);
+        console.log("****************************************************");
+        const publicUrl = process.env.RENDER_EXTERNAL_URL;
         console.log(`Servidor do bot de RPG escutando na porta ${PORT}`);
-        if (process.env.RENDER_EXTERNAL_URL) {
+        if (publicUrl) {
             console.log(`Webhook URL para configurar no Whapi.Cloud: ${publicUrl}/webhook/whatsapp`);
         } else {
-            console.log(`Webhook local para testes (ex: com ngrok): http://localhost:${PORT}/webhook/whatsapp`);
+            console.log(`Webhook local (para testes): http://localhost:${PORT}/webhook/whatsapp`);
         }
         console.log(`Conectado ao DB: ${MONGODB_DB_NAME}, Coleção: ${MONGODB_FICHAS_COLLECTION}`);
-        console.log("----------------------------------------------------");
+        if (OWNER_ID) {
+            console.log(`>>> ATENÇÃO: Bot configurado para aceitar comandos apenas do proprietário: ${OWNER_ID} <<<`);
+        } else {
+            console.warn(">>> ALERTA: OWNER_ID não definido. O bot pode estar aberto a todos os comandos! <<<");
+        }
+        console.log("****************************************************");
+        console.log("*** SERVIDOR PRONTO E RODANDO           ***");
+        console.log("****************************************************");
     });
 }
 
 iniciarServidor().catch(err => {
-    console.error("Falha ao iniciar o servidor:", err);
+    console.error("Falha crítica ao iniciar o servidor:", err);
     process.exit(1);
 });
 
-// --- Tratamento para desligamento gracioso (opcional, mas bom) ---
+// --- Tratamento para desligamento gracioso ---
 async function desligamentoGracioso(signal) {
     console.log(`${signal} recebido. Desligando o bot...`);
     if (dbClient) {
@@ -402,7 +409,6 @@ async function desligamentoGracioso(signal) {
     }
     process.exit(0);
 }
-
 process.on('SIGTERM', () => desligamentoGracioso('SIGTERM'));
-process.on('SIGINT', () => desligamentoGracioso('SIGINT')); // Ctrl+C
-        
+process.on('SIGINT', () => desligamentoGracioso('SIGINT'));
+    
