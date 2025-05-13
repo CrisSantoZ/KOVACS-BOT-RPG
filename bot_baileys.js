@@ -155,7 +155,7 @@ async function salvarFichaNoDB(idJogador, fichaData) {
         console.error(`Erro ao salvar ficha para ${idJogadorStr} no MongoDB:`, error);
     }
 }
-
+// --- FIM DO BLOCO 1 ---
 async function getFichaOuCarregar(idAlvo) {
     const idAlvoTrimmado = String(idAlvo).trim();
     let ficha = todasAsFichas[idAlvoTrimmado];
@@ -165,6 +165,7 @@ async function getFichaOuCarregar(idAlvo) {
             const fichaDB = await fichasCollection.findOne({ _id: idAlvoTrimmado });
             if (fichaDB) {
                 if (!fichaDB.atributos) fichaDB.atributos = JSON.parse(JSON.stringify(fichaModeloArcadia.atributos));
+                // Calcula PV/PM Max ao carregar do DB, se não estiverem definidos ou para garantir atualização
                 fichaDB.pvMax = (fichaDB.atributos.vitalidade * 5) + (fichaDB.nivel * 5) + 20; 
                 fichaDB.pmMax = (fichaDB.atributos.manaBase * 5) + (fichaDB.nivel * 3) + 10; 
                 
@@ -176,6 +177,7 @@ async function getFichaOuCarregar(idAlvo) {
             console.error(`Erro ao buscar ficha ${idAlvoTrimmado} no DB:`, dbError);
         }
     } else if (ficha) { 
+        // Se já está no cache, recalcula PV/PM Max para garantir consistência após level up/mudança de atributo
         if (!ficha.atributos) ficha.atributos = JSON.parse(JSON.stringify(fichaModeloArcadia.atributos));
         ficha.pvMax = (ficha.atributos.vitalidade * 5) + (ficha.nivel * 5) + 20;
         ficha.pmMax = (ficha.atributos.manaBase * 5) + (ficha.nivel * 3) + 10;
@@ -187,11 +189,16 @@ async function atualizarFichaETransmitir(chatId, idAlvo, ficha, mensagemSucesso,
     const idAlvoTrimmado = String(idAlvo).trim();
     ficha.ultimaAtualizacao = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
     
+    // Recalcula PV/PM Max antes de salvar, caso atributos ou nível tenham mudado
     if (!ficha.atributos) ficha.atributos = JSON.parse(JSON.stringify(fichaModeloArcadia.atributos));
     ficha.pvMax = (ficha.atributos.vitalidade * 5) + (ficha.nivel * 5) + 20;
     ficha.pmMax = (ficha.atributos.manaBase * 5) + (ficha.nivel * 3) + 10;
+    // Garante que PV/PM atuais não excedam os máximos
     if (ficha.pvAtual > ficha.pvMax) ficha.pvAtual = ficha.pvMax;
     if (ficha.pmAtual > ficha.pmMax) ficha.pmAtual = ficha.pmMax;
+    if (ficha.pvAtual < 0) ficha.pvAtual = 0; // Garante que não seja negativo
+    if (ficha.pmAtual < 0) ficha.pmAtual = 0; // Garante que não seja negativo
+
 
     todasAsFichas[idAlvoTrimmado] = ficha;
     await salvarFichaNoDB(idAlvoTrimmado, ficha);
@@ -201,17 +208,28 @@ async function atualizarFichaETransmitir(chatId, idAlvo, ficha, mensagemSucesso,
     if (msgFinal.includes("[NOME_PERSONAGEM_ALVO]")) {
         msgFinal = msgFinal.replace(/\[NOME_PERSONAGEM_ALVO\]/g, nomeDisplay);
     }
-    msgFinal = msgFinal.replace(/\{\{ficha\.(\w+)\}\}/g, (match, p1) => {
-        if (ficha[p1] !== undefined) return ficha[p1];
-        if (ficha.atributos && ficha.atributos[p1] !== undefined) return ficha.atributos[p1];
-        return match;
+    // Substitui placeholders como {{ficha.xpAtual}} na mensagem de sucesso
+    msgFinal = msgFinal.replace(/\{\{ficha\.([\w.]+)\}\}/g, (match, p1) => {
+        // Tenta acessar ficha.propriedade ou ficha.objeto.propriedade
+        const keys = p1.split('.');
+        let value = ficha;
+        for (const key of keys) {
+            if (value && typeof value === 'object' && key in value) {
+                value = value[key];
+            } else {
+                return match; // Retorna o placeholder original se o caminho não for encontrado
+            }
+        }
+        return value !== undefined ? value : match;
     });
     
     await enviarMensagemTextoWhapi(chatId, msgFinal);
 }
 
 function calcularXpProximoNivel(nivelAtual) {
-    return nivelAtual * 100 + 50; 
+    // Fórmula de exemplo: Nível 1 -> 100 XP, Nível 2 -> 200 XP, etc.
+    // Pode ser mais complexa: ex, 100, 250, 500, 1000...
+    return nivelAtual * 100 + 50; // Ajustado para ser um pouco mais que nivel*100
 }
 
 // --- CONFIGURAÇÃO DO SERVIDOR EXPRESS ---
@@ -224,7 +242,7 @@ const WHAPI_API_TOKEN = process.env.WHAPI_API_TOKEN;
 const WHAPI_BASE_URL = "https://gate.whapi.cloud";
 
 if (!WHAPI_API_TOKEN) {
-    console.error("FATAL_ERROR: WHAPI_API_TOKEN não definida!");
+    console.error("FATAL_ERROR: Variável de ambiente WHAPI_API_TOKEN não definida!");
 }
 
 // --- FUNÇÕES DE COMANDO DO RPG - ARCÁDIA ---
@@ -246,30 +264,30 @@ async function handleCriarFichaArcadia(chatId, sender, senderName, args) {
     const classeInput = partes[2];
     const origemReinoInput = partes[3];
 
-    // Validação simples de raça e classe (poderia ser mais robusta verificando contra as constantes)
-    if (!RACAS_ARCADIA.find(r => r.nome.toLowerCase() === racaInput.toLowerCase())) {
+    const racaValida = RACAS_ARCADIA.find(r => r.nome.toLowerCase() === racaInput.toLowerCase());
+    const classeValida = CLASSES_ARCADIA.find(c => c.nome.toLowerCase() === classeInput.toLowerCase());
+    const reinoValido = REINOS_ARCADIA.find(reino => reino.nome.toLowerCase() === origemReinoInput.toLowerCase());
+
+    if (!racaValida) {
         await enviarMensagemTextoWhapi(chatId, `Raça "${racaInput}" inválida. Use \`!listaracas\` para ver as opções.`);
         return;
     }
-    if (!CLASSES_ARCADIA.find(c => c.nome.toLowerCase() === classeInput.toLowerCase())) {
+    if (!classeValida) {
         await enviarMensagemTextoWhapi(chatId, `Classe "${classeInput}" inválida. Use \`!listaclasses\` para ver as opções.`);
         return;
     }
-     if (!REINOS_ARCADIA.find(r => r.nome.toLowerCase() === origemReinoInput.toLowerCase())) {
+     if (!reinoValido) {
         await enviarMensagemTextoWhapi(chatId, `Reino de Origem "${origemReinoInput}" inválido. Use \`!listareinos\` para ver as opções.`);
         return;
     }
 
-
     let novaFicha = JSON.parse(JSON.stringify(fichaModeloArcadia));
     novaFicha.nomeJogadorSalvo = senderName;
     novaFicha.nomePersonagem = nomePersonagemInput;
-    novaFicha.raca = RACAS_ARCADIA.find(r => r.nome.toLowerCase() === racaInput.toLowerCase()).nome; // Garante capitalização correta
-    novaFicha.classe = CLASSES_ARCADIA.find(c => c.nome.toLowerCase() === classeInput.toLowerCase()).nome; // Garante capitalização correta
-    novaFicha.origemReino = REINOS_ARCADIA.find(r => r.nome.toLowerCase() === origemReinoInput.toLowerCase()).nome; // Garante capitalização correta
+    novaFicha.raca = racaValida.nome; 
+    novaFicha.classe = classeValida.nome; 
+    novaFicha.origemReino = reinoValido.nome; 
     
-    // Atributos base e pontos para distribuir já estão no fichaModeloArcadia
-    // Calcular PV/PM Max iniciais e XP próximo nível
     if (!novaFicha.atributos) novaFicha.atributos = JSON.parse(JSON.stringify(fichaModeloArcadia.atributos));
     novaFicha.pvMax = (novaFicha.atributos.vitalidade * 5) + (novaFicha.nivel * 5) + 20;
     novaFicha.pvAtual = novaFicha.pvMax;
@@ -280,12 +298,11 @@ async function handleCriarFichaArcadia(chatId, sender, senderName, args) {
     await atualizarFichaETransmitir(chatId, idJogador, novaFicha, `🎉 Personagem ${nomePersonagemInput} (${novaFicha.raca} ${novaFicha.classe} de ${novaFicha.origemReino}) criado para Arcádia!\nUse \`!distribuirpontos <atributo> <valor>\` para usar seus ${novaFicha.atributos.pontosParaDistribuir} pontos iniciais.\nUse \`!ficha\` para ver os detalhes.`);
 }
 
-// --- FIM DO BLOCO 1 ---
-    async function handleAdminCriarFichaArcadia(chatId, senderOwner, argsAdmin) {
+async function handleAdminCriarFichaArcadia(chatId, senderOwner, argsAdmin) {
     const comandoCompleto = argsAdmin.join(" ");
     const partesPrincipais = comandoCompleto.split(';');
     
-    if (partesPrincipais.length < 5) { // ID_ALVO;Nome Personagem;Raça;Classe;ReinoOrigem
+    if (partesPrincipais.length < 5) { 
         await enviarMensagemTextoWhapi(chatId, "Formato incorreto! Uso: `!admincriar <ID_ALVO>;<Nome Personagem>;<Raça>;<Classe>;<ReinoOrigem>`\nID_ALVO é só o número (ex: 5577...). Use `!listaracas`, etc. para opções.");
         return;
     }
@@ -300,52 +317,50 @@ async function handleCriarFichaArcadia(chatId, sender, senderName, args) {
         await enviarMensagemTextoWhapi(chatId, `ID do Jogador Alvo (${idJogadorAlvo}) inválido. Deve conter apenas números.`);
         return;
     }
-     // Validação de Raça, Classe e Reino
+    
     const racaValida = RACAS_ARCADIA.find(r => r.nome.toLowerCase() === racaInput.toLowerCase());
     const classeValida = CLASSES_ARCADIA.find(c => c.nome.toLowerCase() === classeInput.toLowerCase());
     const reinoValido = REINOS_ARCADIA.find(reino => reino.nome.toLowerCase() === origemReinoInput.toLowerCase());
 
     if (!racaValida) {
-        await enviarMensagemTextoWhapi(chatId, `Raça "${racaInput}" inválida. Use \`!listaracas\` para ver as opções.`);
+        await enviarMensagemTextoWhapi(chatId, `Raça "${racaInput}" inválida para o ID ${idJogadorAlvo}. Use \`!listaracas\` para ver as opções.`);
         return;
     }
     if (!classeValida) {
-        await enviarMensagemTextoWhapi(chatId, `Classe "${classeInput}" inválida. Use \`!listaclasses\` para ver as opções.`);
+        await enviarMensagemTextoWhapi(chatId, `Classe "${classeInput}" inválida para o ID ${idJogadorAlvo}. Use \`!listaclasses\` para ver as opções.`);
         return;
     }
     if (!reinoValido) {
-        await enviarMensagemTextoWhapi(chatId, `Reino de Origem "${origemReinoInput}" inválido. Use \`!listareinos\` para ver as opções.`);
+        await enviarMensagemTextoWhapi(chatId, `Reino de Origem "${origemReinoInput}" inválido para o ID ${idJogadorAlvo}. Use \`!listareinos\` para ver as opções.`);
         return;
     }
     
     let novaFicha = JSON.parse(JSON.stringify(fichaModeloArcadia));
-    novaFicha.nomeJogadorSalvo = `(Admin) ${idJogadorAlvo}`; // Pode ser o nome do jogador se soubermos, ou deixar para ele preencher
+    novaFicha.nomeJogadorSalvo = `(Admin) ${idJogadorAlvo}`; 
     novaFicha.nomePersonagem = nomePersonagemInput;
-    novaFicha.raca = racaValida.nome; // Usa o nome capitalizado corretamente
-    novaFicha.classe = classeValida.nome; // Usa o nome capitalizado corretamente
-    novaFicha.origemReino = reinoValido.nome; // Usa o nome capitalizado corretamente
+    novaFicha.raca = racaValida.nome; 
+    novaFicha.classe = classeValida.nome; 
+    novaFicha.origemReino = reinoValido.nome; 
 
-    // Atributos base e pontosParaDistribuir já vêm do fichaModeloArcadia
-    // Calcular PV/PM Max iniciais
-    if (!novaFicha.atributos) novaFicha.atributos = JSON.parse(JSON.stringify(fichaModeloArcadia.atributos)); // Garante que existe
+    if (!novaFicha.atributos) novaFicha.atributos = JSON.parse(JSON.stringify(fichaModeloArcadia.atributos));
     novaFicha.pvMax = (novaFicha.atributos.vitalidade * 5) + (novaFicha.nivel * 5) + 20;
     novaFicha.pvAtual = novaFicha.pvMax;
     novaFicha.pmMax = (novaFicha.atributos.manaBase * 5) + (novaFicha.nivel * 3) + 10;
     novaFicha.pmAtual = novaFicha.pmMax;
     novaFicha.xpProximoNivel = calcularXpProximoNivel(novaFicha.nivel);
     
-    todasAsFichas[idJogadorAlvo] = novaFicha; // Adiciona/Atualiza no cache
+    todasAsFichas[idJogadorAlvo] = novaFicha; 
     await atualizarFichaETransmitir(chatId, idJogadorAlvo, novaFicha, `🎉 [Admin] Personagem ${nomePersonagemInput} (${novaFicha.raca} ${novaFicha.classe}) CRIADO/ATUALIZADO para o ID ${idJogadorAlvo}.`);
 }
 
+// --- FIM DO BLOCO 2 ---
 async function handleVerFichaArcadia(chatId, sender, args) {
-    let idAlvoConsulta = sender; // Por padrão, consulta a ficha do próprio remetente (que já foi "trimado")
+    let idAlvoConsulta = sender; 
     let adminConsultandoOutro = false;
-    // sender já é o ID "trimado" do remetente. OWNER_ID também é "trimado" na inicialização.
-
-    if (args.length > 0 && sender === OWNER_ID) { // Se houver argumento E for o OWNER_ID usando
+    
+    if (args.length > 0 && sender === OWNER_ID) { 
         const idPotencial = String(args[0]).trim();
-        if (/^\d+$/.test(idPotencial)) { // Verifica se é um ID numérico
+        if (/^\d+$/.test(idPotencial)) { 
             idAlvoConsulta = idPotencial;
             adminConsultandoOutro = true;
             console.log(`[Admin] ${sender} está consultando a ficha do ID_ALVO: ${idAlvoConsulta}`);
@@ -423,7 +438,6 @@ async function handleVerFichaArcadia(chatId, sender, args) {
     if (ficha.equipamento) {
         for(const slot in ficha.equipamento) {
             if (ficha.equipamento[slot]) {
-                // Converte camelCase para Título Formatado (ex: maoDireita -> Mao Direita)
                 const nomeSlot = slot.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()); 
                 resposta += `  ☆ ${nomeSlot}: ${typeof ficha.equipamento[slot] === 'object' ? ficha.equipamento[slot].itemNome : ficha.equipamento[slot]}\n`;
                 temEquip = true;
@@ -455,19 +469,25 @@ async function handleAddXPArcadia(chatId, sender, args) {
 
     let mensagensLevelUp = [];
     let subiuDeNivel = false;
+    // Garante que atributos exista e tenha a estrutura padrão se não tiver sido inicializado corretamente antes
+    if (!ficha.atributos) ficha.atributos = JSON.parse(JSON.stringify(fichaModeloArcadia.atributos));
+    
     while (ficha.xpAtual >= ficha.xpProximoNivel) {
         subiuDeNivel = true;
         ficha.xpAtual -= ficha.xpProximoNivel;
         ficha.nivel = (ficha.nivel || 0) + 1;
         
-        if(!ficha.atributos) ficha.atributos = JSON.parse(JSON.stringify(fichaModeloArcadia.atributos));
         ficha.atributos.pontosParaDistribuir = (ficha.atributos.pontosParaDistribuir || 0) + 2; 
         
         const pvGanho = Math.floor((ficha.atributos.vitalidade || 5) / 2) + 5;
         const pmGanho = Math.floor((ficha.atributos.manaBase || 5) / 2) + 3;
         
-        ficha.pvMax = (ficha.pvMax || ((ficha.atributos.vitalidade * 5) + ((ficha.nivel-1) * 5) + 20)) + pvGanho;
-        ficha.pmMax = (ficha.pmMax || ((ficha.atributos.manaBase * 5) + ((ficha.nivel-1) * 3) + 10)) + pmGanho;
+        // Inicializa pvMax/pmMax se não existirem, usando valores base do nível anterior para o cálculo do incremento
+        const pvMaxAnterior = ficha.pvMax || ((ficha.atributos.vitalidade * 5) + ((ficha.nivel-1) * 5) + 20);
+        const pmMaxAnterior = ficha.pmMax || ((ficha.atributos.manaBase * 5) + ((ficha.nivel-1) * 3) + 10);
+        ficha.pvMax = pvMaxAnterior + pvGanho;
+        ficha.pmMax = pmMaxAnterior + pmGanho;
+
         ficha.pvAtual = ficha.pvMax; 
         ficha.pmAtual = ficha.pmMax;
 
@@ -482,8 +502,500 @@ async function handleAddXPArcadia(chatId, sender, args) {
     
     await atualizarFichaETransmitir(chatId, sender, ficha, mensagemFinal);
 }
+
+async function handleSetNivelArcadia(chatId, sender, args) {
+    const ficha = await getFichaOuCarregar(sender);
+    if (!ficha) { await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arcádia não foi encontrada."); return; }
+    if (args.length === 0 || isNaN(parseInt(args[0])) || parseInt(args[0]) < 1) { await enviarMensagemTextoWhapi(chatId, "Uso: `!setnivel <novo_nivel_numerico_maior_que_0>`.\nExemplo: `!setnivel 3`"); return; }
+    const novoNivel = parseInt(args[0]); 
+    const nivelAntigo = ficha.nivel || 1; // Assume nível 1 se não definido
+    
+    ficha.nivel = novoNivel; 
+    ficha.xpAtual = 0; 
+    ficha.xpProximoNivel = calcularXpProximoNivel(ficha.nivel);
+
+    // Garante que atributos exista
+    if (!ficha.atributos) ficha.atributos = JSON.parse(JSON.stringify(fichaModeloArcadia.atributos));
+    
+    const diffNivel = novoNivel - nivelAntigo;
+    if (diffNivel > 0) { 
+        ficha.atributos.pontosParaDistribuir = (ficha.atributos.pontosParaDistribuir || 0) + (diffNivel * 2); 
+    }
+    // PV/PM Max e Atuais serão recalculados e preenchidos por atualizarFichaETransmitir
+    await atualizarFichaETransmitir(chatId, sender, ficha, `Nível atualizado para ${ficha.nivel}. XP zerado. Próximo nível: ${ficha.xpProximoNivel} XP. Pontos p/ distribuir: ${ficha.atributos.pontosParaDistribuir || 0}.`);
+}
+
+async function handleAddFlorins(chatId, sender, args) { 
+    const ficha = await getFichaOuCarregar(sender);
+    if (!ficha) { await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arcádia não foi encontrada."); return; }
+    if (args.length === 0 || isNaN(parseInt(args[0]))) { await enviarMensagemTextoWhapi(chatId, "Uso: `!addflorins <valor_numerico>`.\nExemplo: `!addflorins 100` ou `!addflorins -20`"); return; }
+    const valorFlorins = parseInt(args[0]);
+    ficha.florinsDeOuro = (ficha.florinsDeOuro || 0) + valorFlorins;
+    if (ficha.florinsDeOuro < 0) ficha.florinsDeOuro = 0;
+    await atualizarFichaETransmitir(chatId, sender, ficha, `Florins de Ouro atualizados! Você agora tem ${ficha.florinsDeOuro} FO.`);
+}
+
+async function handleAddEssencia(chatId, sender, args) {
+    const ficha = await getFichaOuCarregar(sender);
+    if (!ficha) { await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arcádia não foi encontrada."); return; }
+    if (args.length === 0 || isNaN(parseInt(args[0]))) { await enviarMensagemTextoWhapi(chatId, "Uso: `!addessencia <valor_numerico>`.\nExemplo: `!addessencia 10` ou `!addessencia -2`"); return; }
+    const valorEssencia = parseInt(args[0]);
+    ficha.essenciaDeArcadia = (ficha.essenciaDeArcadia || 0) + valorEssencia;
+    if (ficha.essenciaDeArcadia < 0) ficha.essenciaDeArcadia = 0;
+    await atualizarFichaETransmitir(chatId, sender, ficha, `Essência de Arcádia atualizada! Você agora tem ${ficha.essenciaDeArcadia} EA.`);
+}
+
+async function handleAddItemArcadia(chatId, sender, args) {
+    const ficha = await getFichaOuCarregar(sender);
+    if (!ficha) { await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arcádia não foi encontrada."); return; }
+    const inputCompleto = args.join(" "); 
+    const partesItem = inputCompleto.split(';').map(p => p.trim());
+    if (partesItem.length === 0 || !partesItem[0]) { await enviarMensagemTextoWhapi(chatId, "Uso: `!additem <nome do item>[;quantidade;tipo;descricao]`\nExemplo: `!additem Espada Longa;1;Arma Média;Lâmina de aço comum`"); return; }
+    const nomeItem = partesItem[0]; 
+    const quantidade = partesItem[1] ? parseInt(partesItem[1]) : 1;
+    const tipoItem = partesItem[2] || "Item"; 
+    const descricaoItem = partesItem[3] || "";
+
+    if (isNaN(quantidade) || quantidade < 1) { await enviarMensagemTextoWhapi(chatId, "Quantidade inválida. Deve ser um número maior que 0."); return; }
+    if (!ficha.inventario) ficha.inventario = []; 
+    const itemExistenteIndex = ficha.inventario.findIndex(i => i.itemNome.toLowerCase() === nomeItem.toLowerCase());
+
+    if (itemExistenteIndex > -1) {
+        ficha.inventario[itemExistenteIndex].quantidade = (ficha.inventario[itemExistenteIndex].quantidade || 0) + quantidade;
+        if (descricaoItem) ficha.inventario[itemExistenteIndex].descricao = descricaoItem;
+        if (tipoItem !== "Item") ficha.inventario[itemExistenteIndex].tipo = tipoItem;
+         await atualizarFichaETransmitir(chatId, sender, ficha, `Quantidade de "${nomeItem}" aumentada para ${ficha.inventario[itemExistenteIndex].quantidade}.`);
+    } else {
+        ficha.inventario.push({ itemNome: nomeItem, quantidade: quantidade, tipo: tipoItem, descricao: descricaoItem });
+        await atualizarFichaETransmitir(chatId, sender, ficha, `"${nomeItem}" (x${quantidade}) adicionado ao seu inventário.`);
+    }
+}
+
+async function handleDelItemArcadia(chatId, sender, args) {
+    const ficha = await getFichaOuCarregar(sender);
+    if (!ficha || !ficha.inventario) { await enviarMensagemTextoWhapi(chatId, "Sua ficha ou inventário não foi encontrado."); return; }
+    const inputCompleto = args.join(" "); 
+    const partesItem = inputCompleto.split(';').map(p => p.trim());
+    if (partesItem.length === 0 || !partesItem[0]) { await enviarMensagemTextoWhapi(chatId, "Uso: `!delitem <nome do item>[;quantidade]`\nExemplo: `!delitem Adaga Simples;1`"); return; }
+    const nomeItem = partesItem[0]; 
+    const quantidadeRemover = partesItem[1] ? parseInt(partesItem[1]) : 1;
+
+    if (isNaN(quantidadeRemover) || quantidadeRemover < 1) { await enviarMensagemTextoWhapi(chatId, "Quantidade a remover inválida. Deve ser um número maior que 0."); return; }
+    const itemExistenteIndex = ficha.inventario.findIndex(i => i.itemNome.toLowerCase() === nomeItem.toLowerCase());
+
+    if (itemExistenteIndex === -1) { await enviarMensagemTextoWhapi(chatId, `Item "${nomeItem}" não encontrado no seu inventário.`); return; }
+    
+    const nomeItemOriginal = ficha.inventario[itemExistenteIndex].itemNome;
+    ficha.inventario[itemExistenteIndex].quantidade -= quantidadeRemover;
+
+    if (ficha.inventario[itemExistenteIndex].quantidade <= 0) {
+        ficha.inventario.splice(itemExistenteIndex, 1);
+        await atualizarFichaETransmitir(chatId, sender, ficha, `"${nomeItemOriginal}" removido completamente do seu inventário.`);
+    } else {
+        await atualizarFichaETransmitir(chatId, sender, ficha, `${quantidadeRemover} unidade(s) de "${nomeItemOriginal}" removida(s). Restam ${ficha.inventario[itemExistenteIndex].quantidade}.`);
+    }
+}
+
+// --- FUNÇÕES DE ADMIN PARA MODIFICAR FICHAS DE OUTROS (ADAPTADAS PARA ARCÁDIA) ---
+async function handleAdminComandoFichaArcadia(chatId, args, tipoComando, callbackModificacao, mensagemSucessoPadrao, mensagemErroUso) {
+    if (args.length < 2) { 
+        await enviarMensagemTextoWhapi(chatId, mensagemErroUso);
+        return;
+    }
+    const idAlvo = args[0].trim();
+    if (!/^\d+$/.test(idAlvo)) {
+        await enviarMensagemTextoWhapi(chatId, `ID do Jogador Alvo (${idAlvo}) inválido. Deve conter apenas números.`);
+        return;
+    }
+    const fichaAlvo = await getFichaOuCarregar(idAlvo);
+    if (!fichaAlvo) {
+        await enviarMensagemTextoWhapi(chatId, `Ficha não encontrada para o ID ${idAlvo} em Arcádia. Use \`!admincriar\` primeiro.`);
+        return;
+    }
+    
+    let fichaModificada = JSON.parse(JSON.stringify(fichaAlvo)); // Clonar para não modificar o cache diretamente antes de salvar
+    const resultadoCallback = callbackModificacao(fichaModificada, args.slice(1)); // Passa apenas os argumentos relevantes para a modificação
+
+    if (typeof resultadoCallback === 'string' && resultadoCallback.startsWith("ERRO:")) {
+        await enviarMensagemTextoWhapi(chatId, resultadoCallback.substring(5)); // Remove "ERRO:"
+        return;
+    }
+    if (resultadoCallback === false ) { // Erro de validação genérico no callback
+         await enviarMensagemTextoWhapi(chatId, mensagemErroUso); // Reenvia a mensagem de uso do comando
+        return;
+    }
+    
+    // Se resultadoCallback for uma string de sucesso específica (ex: de delitem), use-a
+    const mensagemSucessoFinal = (typeof resultadoCallback === 'string') ? resultadoCallback : mensagemSucessoPadrao;
+
+    await atualizarFichaETransmitir(chatId, idAlvo, fichaModificada, mensagemSucessoFinal, fichaModificada.nomePersonagem || idAlvo);
+}
+
+// Callbacks para modificações de Admin (Arcádia)
+function modificarXPArcadia(ficha, argsValor) {
+    const valorXP = parseInt(argsValor[0]);
+    if (isNaN(valorXP)) { return "ERRO: Valor de XP inválido.";  }
+    ficha.xpAtual = (ficha.xpAtual || 0) + valorXP;
+
+    let mensagensLevelUp = []; 
+    let subiuDeNivelAdmin = false;
+    if (!ficha.atributos) ficha.atributos = JSON.parse(JSON.stringify(fichaModeloArcadia.atributos)); // Garante que atributos exista
+    
+    while (ficha.xpAtual >= ficha.xpProximoNivel) {
+        subiuDeNivelAdmin = true; 
+        ficha.xpAtual -= ficha.xpProximoNivel; 
+        ficha.nivel = (ficha.nivel || 0) + 1;
+        
+        ficha.atributos.pontosParaDistribuir = (ficha.atributos.pontosParaDistribuir || 0) + 2; 
+        
+        const pvGanhoAdmin = Math.floor((ficha.atributos.vitalidade || 5) / 2) + 5;
+        const pmGanhoAdmin = Math.floor((ficha.atributos.manaBase || 5) / 2) + 3;
+        
+        const pvMaxAnterior = ficha.pvMax || ((ficha.atributos.vitalidade * 5) + ((ficha.nivel-1) * 5) + 20);
+        const pmMaxAnterior = ficha.pmMax || ((ficha.atributos.manaBase * 5) + ((ficha.nivel-1) * 3) + 10);
+        ficha.pvMax = pvMaxAnterior + pvGanhoAdmin;
+        ficha.pmMax = pmMaxAnterior + pmGanhoAdmin;
+
+        ficha.pvAtual = ficha.pvMax; 
+        ficha.pmAtual = ficha.pmMax;
+
+        mensagensLevelUp.push(`🎉 [Admin] ${ficha.nomePersonagem || '[NOME_PERSONAGEM_ALVO]'} alcançou o Nível ${ficha.nivel}!`);
+        ficha.xpProximoNivel = calcularXpProximoNivel(ficha.nivel);
+    }
+    let msgRetorno = `XP de [NOME_PERSONAGEM_ALVO] atualizado para ${ficha.xpAtual}/${ficha.xpProximoNivel}.`;
+    if (subiuDeNivelAdmin) { 
+        msgRetorno = mensagensLevelUp.join("\n") + "\n" + msgRetorno; 
+    }
+    return msgRetorno;
+}
 // --- FIM DO BLOCO 2 ---
-                 // --- ROTA DE WEBHOOK ---
+function modificarNivelArcadia(ficha, argsValor) {
+    const novoNivel = parseInt(argsValor[0]);
+    if (isNaN(novoNivel) || novoNivel < 1) return "ERRO: Nível inválido.";
+    const nivelAntigo = ficha.nivel || 1; 
+    ficha.nivel = novoNivel; 
+    ficha.xpAtual = 0;
+    ficha.xpProximoNivel = calcularXpProximoNivel(ficha.nivel);
+    
+    if (!ficha.atributos) ficha.atributos = JSON.parse(JSON.stringify(fichaModeloArcadia.atributos));
+    const diffNivel = novoNivel - nivelAntigo;
+    if (diffNivel > 0) { 
+        ficha.atributos.pontosParaDistribuir = (ficha.atributos.pontosParaDistribuir || 0) + (diffNivel * 2); 
+    }
+    // A função atualizarFichaETransmitir recalculará PV/PM Max com base no novo nível e atributos
+    return `Nível de [NOME_PERSONAGEM_ALVO] definido para ${ficha.nivel}. XP zerado. Próximo nível: ${ficha.xpProximoNivel} XP. Pontos p/ distribuir: ${ficha.atributos.pontosParaDistribuir || 0}.`;
+}
+
+function modificarFlorins(ficha, argsValor) { 
+    const valorFlorins = parseInt(argsValor[0]);
+    if (isNaN(valorFlorins)) return "ERRO: Valor de Florins inválido.";
+    ficha.florinsDeOuro = (ficha.florinsDeOuro || 0) + valorFlorins;
+    if (ficha.florinsDeOuro < 0) ficha.florinsDeOuro = 0;
+    return `Florins de Ouro de [NOME_PERSONAGEM_ALVO] atualizados para ${ficha.florinsDeOuro} FO.`;
+}
+
+function modificarEssencia(ficha, argsValor) {
+    const valorEssencia = parseInt(argsValor[0]);
+    if (isNaN(valorEssencia)) return "ERRO: Valor de Essência inválido.";
+    ficha.essenciaDeArcadia = (ficha.essenciaDeArcadia || 0) + valorEssencia;
+    if (ficha.essenciaDeArcadia < 0) ficha.essenciaDeArcadia = 0;
+    return `Essência de Arcádia de [NOME_PERSONAGEM_ALVO] atualizada para ${ficha.essenciaDeArcadia} EA.`;
+}
+
+function modificarAddItemArcadia(ficha, argsItem) {
+    const inputCompleto = argsItem.join(" "); 
+    const partesItem = inputCompleto.split(';').map(p => p.trim());
+    if (partesItem.length === 0 || !partesItem[0]) return "ERRO: Nome do item obrigatório.";
+    const nomeItem = partesItem[0]; 
+    const quantidade = partesItem[1] ? parseInt(partesItem[1]) : 1;
+    const tipoItem = partesItem[2] || "Item Genérico"; 
+    const descricaoItem = partesItem[3] || "";
+    if (isNaN(quantidade) || quantidade < 1) return "ERRO: Quantidade inválida.";
+    if (!ficha.inventario) ficha.inventario = [];
+    const itemExistenteIndex = ficha.inventario.findIndex(i => i.itemNome.toLowerCase() === nomeItem.toLowerCase());
+    if (itemExistenteIndex > -1) {
+        ficha.inventario[itemExistenteIndex].quantidade = (ficha.inventario[itemExistenteIndex].quantidade || 0) + quantidade;
+        if (descricaoItem) ficha.inventario[itemExistenteIndex].descricao = descricaoItem;
+        if (tipoItem !== "Item Genérico") ficha.inventario[itemExistenteIndex].tipo = tipoItem;
+        return `Quantidade de "${nomeItem}" aumentada para ${ficha.inventario[itemExistenteIndex].quantidade} para [NOME_PERSONAGEM_ALVO].`;
+    } else {
+        ficha.inventario.push({ itemNome: nomeItem, quantidade: quantidade, tipo: tipoItem, descricao: descricaoItem });
+        return `"${nomeItem}" (x${quantidade}) adicionado ao inventário de [NOME_PERSONAGEM_ALVO].`;
+    }
+}
+
+function modificarDelItemArcadia(ficha, argsItem) {
+    const inputCompleto = argsItem.join(" "); 
+    const partesItem = inputCompleto.split(';').map(p => p.trim());
+    if (partesItem.length === 0 || !partesItem[0]) return "ERRO: Nome do item obrigatório.";
+    const nomeItem = partesItem[0]; 
+    const quantidadeRemover = partesItem[1] ? parseInt(partesItem[1]) : 1;
+    if (isNaN(quantidadeRemover) || quantidadeRemover < 1) return "ERRO: Quantidade a remover inválida.";
+    if (!ficha.inventario) ficha.inventario = [];
+    const itemExistenteIndex = ficha.inventario.findIndex(i => i.itemNome.toLowerCase() === nomeItem.toLowerCase());
+    if (itemExistenteIndex === -1) return `ERRO: Item "${nomeItem}" não encontrado no inventário de [NOME_PERSONAGEM_ALVO].`;
+    
+    const nomeItemOriginal = ficha.inventario[itemExistenteIndex].itemNome;
+    ficha.inventario[itemExistenteIndex].quantidade -= quantidadeRemover;
+
+    if (ficha.inventario[itemExistenteIndex].quantidade <= 0) {
+        ficha.inventario.splice(itemExistenteIndex, 1);
+        return `"${nomeItemOriginal}" removido completamente do inventário de [NOME_PERSONAGEM_ALVO].`;
+    } else {
+        return `${quantidadeRemover} unidade(s) de "${nomeItemOriginal}" removida(s) do inventário de [NOME_PERSONAGEM_ALVO]. Restam ${ficha.inventario[itemExistenteIndex].quantidade}.`;
+    }
+}
+
+async function handleAdminSetAtributoArcadia(chatId, args) {
+    if (args.length < 3) { 
+        await enviarMensagemTextoWhapi(chatId, "Uso: `!adminsetattr <ID_ALVO> <atributo> <valor>`\nAtributos: forca, agilidade, vitalidade, manaBase, intelecto, carisma.");
+        return;
+    }
+    const idAlvo = args[0].trim(); 
+    const atributoNome = args[1].toLowerCase().trim(); 
+    const valor = parseInt(args[2]);
+
+    if (!/^\d+$/.test(idAlvo)) {
+        await enviarMensagemTextoWhapi(chatId, `ID do Jogador Alvo (${idAlvo}) inválido.`);
+        return;
+    }
+    const atributosValidos = ["forca", "agilidade", "vitalidade", "manaBase", "intelecto", "carisma"];
+    if (!atributosValidos.includes(atributoNome)) {
+        await enviarMensagemTextoWhapi(chatId, `Atributo "${atributoNome}" inválido. Válidos: ${atributosValidos.join(", ")}.`);
+        return;
+    }
+    if (isNaN(valor) || valor < 0) { 
+        await enviarMensagemTextoWhapi(chatId, `Valor para ${atributoNome} deve ser um número positivo ou zero.`);
+        return;
+    }
+
+    const fichaAlvo = await getFichaOuCarregar(idAlvo);
+    if (!fichaAlvo) {
+        await enviarMensagemTextoWhapi(chatId, `Ficha não encontrada para o ID ${idAlvo} em Arcádia.`);
+        return;
+    }
+    if (!fichaAlvo.atributos) fichaAlvo.atributos = JSON.parse(JSON.stringify(fichaModeloArcadia.atributos)); 
+    fichaAlvo.atributos[atributoNome] = valor;
+    
+    await atualizarFichaETransmitir(chatId, idAlvo, fichaAlvo, `[Admin] Atributo ${atributoNome} de [NOME_PERSONAGEM_ALVO] definido para ${valor}. PV/PM recalculados.`, fichaAlvo.nomePersonagem || idAlvo);
+}
+
+async function handleAdminAddPontosAtributoArcadia(chatId, args) {
+    if (args.length < 2) { 
+        await enviarMensagemTextoWhapi(chatId, "Uso: `!adminaddpontosattr <ID_ALVO> <quantidade>` (pode ser negativo).");
+        return;
+    }
+    const idAlvo = args[0].trim(); 
+    const quantidade = parseInt(args[1]);
+
+    if (!/^\d+$/.test(idAlvo)) {
+        await enviarMensagemTextoWhapi(chatId, `ID do Jogador Alvo (${idAlvo}) inválido.`);
+        return;
+    }
+    if (isNaN(quantidade)) {
+        await enviarMensagemTextoWhapi(chatId, "Quantidade de pontos deve ser um número.");
+        return;
+    }
+
+    const fichaAlvo = await getFichaOuCarregar(idAlvo);
+    if (!fichaAlvo) {
+        await enviarMensagemTextoWhapi(chatId, `Ficha não encontrada para o ID ${idAlvo} em Arcádia.`);
+        return;
+    }
+    if (!fichaAlvo.atributos) fichaAlvo.atributos = JSON.parse(JSON.stringify(fichaModeloArcadia.atributos)); 
+    fichaAlvo.atributos.pontosParaDistribuir = (fichaAlvo.atributos.pontosParaDistribuir || 0) + quantidade;
+    if (fichaAlvo.atributos.pontosParaDistribuir < 0) fichaAlvo.atributos.pontosParaDistribuir = 0;
+
+    await atualizarFichaETransmitir(chatId, idAlvo, fichaAlvo, `[Admin] Pontos para distribuir de [NOME_PERSONAGEM_ALVO] ajustados para ${fichaAlvo.atributos.pontosParaDistribuir}.`, fichaAlvo.nomePersonagem || idAlvo);
+}
+
+// --- NOVO COMANDO: Boas Vindas Arcádia ---
+async function handleBoasVindasArcadia(chatId, senderName) {
+    let mensagem = `🌟 Saudações, ${senderName}! Bem-vindo(a) a Arcádia! 🌟\n\n`;
+    mensagem += "Um mundo medieval vibrante com magia, mas também repleto de perigos. Criaturas ancestrais despertam, impuros espreitam nas sombras e antigos conflitos ameaçam reacender as chamas da guerra entre os reinos.\n\n";
+    mensagem += "Dos nobres Eldari nas florestas encantadas de Elarion, passando pelos mestres forjadores Valtherans em Durnholde, até os versáteis Humanos de Valdoria e os enigmáticos Seraphim na cidade flutuante de Caelum – cada raça e reino possui sua história e seus desafios.\n\n";
+    mensagem += "Prepare-se para explorar terras vastas, desde os campos férteis de Valdoria até as sombrias Ravengard e a misteriosa Ilha de Morwyn. Escolha sua classe, aprimore seus atributos e habilidades, e forje seu destino neste mundo instável.\n\n";
+    mensagem += "Que suas aventuras sejam épicas!\n\n";
+    mensagem += "Use `!comandos` para ver a lista de ações disponíveis.\n";
+    mensagem += "Use `!criar <Nome>;<Raça>;<Classe>;<ReinoOrigem>` para iniciar sua jornada!";
+    await enviarMensagemTextoWhapi(chatId, mensagem);
+}
+
+
+// --- NOVO COMANDO: Distribuir Pontos de Atributo (Jogador) ---
+async function handleDistribuirPontos(chatId, sender, args) {
+    const ficha = await getFichaOuCarregar(sender);
+    if (!ficha) {
+        await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arcádia não foi encontrada. Crie uma com `!criar`.");
+        return;
+    }
+    if (!ficha.atributos || ficha.atributos.pontosParaDistribuir === undefined || ficha.atributos.pontosParaDistribuir <= 0) {
+        await enviarMensagemTextoWhapi(chatId, "Você não tem pontos de atributo para distribuir no momento.");
+        return;
+    }
+    if (args.length < 2) { // atributo, quantidade
+        await enviarMensagemTextoWhapi(chatId, "Uso: `!distribuirpontos <atributo> <quantidade>`\nAtributos: forca, agilidade, vitalidade, manaBase, intelecto, carisma.\nExemplo: `!distribuirpontos forca 2`");
+        return;
+    }
+    const atributoNome = args[0].toLowerCase().trim(); 
+    const pontosADistribuir = parseInt(args[1]);
+
+    const atributosValidos = ["forca", "agilidade", "vitalidade", "manaBase", "intelecto", "carisma"];
+    if (!atributosValidos.includes(atributoNome)) {
+        await enviarMensagemTextoWhapi(chatId, `Atributo "${atributoNome}" inválido. Válidos: ${atributosValidos.join(", ")}.`);
+        return;
+    }
+    if (isNaN(pontosADistribuir) || pontosADistribuir <= 0) {
+        await enviarMensagemTextoWhapi(chatId, "A quantidade de pontos a distribuir deve ser um número maior que zero.");
+        return;
+    }
+    if (pontosADistribuir > ficha.atributos.pontosParaDistribuir) {
+        await enviarMensagemTextoWhapi(chatId, `Você só tem ${ficha.atributos.pontosParaDistribuir} pontos para distribuir. Não pode usar ${pontosADistribuir}.`);
+        return;
+    }
+
+    ficha.atributos[atributoNome] = (ficha.atributos[atributoNome] || 0) + pontosADistribuir;
+    ficha.atributos.pontosParaDistribuir -= pontosADistribuir;
+    
+    await atualizarFichaETransmitir(chatId, sender, ficha, `Atributo ${atributoNome} aumentado em ${pontosADistribuir}! Novo valor: ${ficha.atributos[atributoNome]}.\nVocê ainda tem ${ficha.atributos.pontosParaDistribuir} pontos para distribuir.`);
+}
+
+// --- NOVO COMANDO: Jackpot (Arcádia) ---
+async function handleJackpotArcadia(chatId, sender) {
+    const ficha = await getFichaOuCarregar(sender);
+    if (!ficha) {
+        await enviarMensagemTextoWhapi(chatId, "Você precisa de uma ficha em Arcádia para tentar a sorte no Jackpot!");
+        return;
+    }
+
+    const custoJackpot = 25; 
+    if ((ficha.florinsDeOuro || 0) < custoJackpot) {
+        await enviarMensagemTextoWhapi(chatId, `Você precisa de ${custoJackpot} Florins de Ouro para girar o Jackpot. Você tem ${ficha.florinsDeOuro || 0} FO.`);
+        return;
+    }
+
+    ficha.florinsDeOuro -= custoJackpot;
+    let premioMsg = "";
+    const sorte = Math.random(); 
+
+    if (sorte < 0.01) { 
+        const essenciaGanha = 5;
+        ficha.essenciaDeArcadia = (ficha.essenciaDeArcadia || 0) + essenciaGanha;
+        premioMsg = `🌟✨ JACKPOT LENDÁRIO!!! ✨🌟\nVocê ganhou ${essenciaGanha} Essências de Arcádia e 100 Florins de Ouro! Que sorte incrível!`;
+        ficha.florinsDeOuro += 100;
+    } else if (sorte < 0.10) { 
+        const florinsGanhos = Math.floor(Math.random() * 100) + 50; 
+        ficha.florinsDeOuro += florinsGanhos;
+        premioMsg = `💰 Sorte Grande! Você ganhou ${florinsGanhos} Florins de Ouro!`;
+    } else if (sorte < 0.30) { 
+        const florinsGanhos = Math.floor(Math.random() * 40) + 10; 
+        ficha.florinsDeOuro += florinsGanhos;
+        premioMsg = `🍀 Um bom prêmio! Você ganhou ${florinsGanhos} Florins de Ouro!`;
+    } else if (sorte < 0.60) { 
+        premioMsg = `💨 Quase! O Jackpot não te deu nada desta vez... apenas o vento.`;
+    } else { 
+        const pegadinhas = [
+            "Você puxa a alavanca e... uma meia velha e fedorenta cai do Jackpot! Que azar!",
+            "O Jackpot solta uma fumaça colorida e te entrega um biscoito da sorte. Dentro dele está escrito: 'Tente novamente'.",
+            "Você ganhou... um abraço imaginário do Mestre do Jackpot! 🤗",
+            "Uma pequena quantia de 5 Florins de Ouro é sua! Melhor que nada, certo?"
+        ];
+        premioMsg = pegadinhas[Math.floor(Math.random() * pegadinhas.length)];
+        if (premioMsg.includes("5 Florins")) ficha.florinsDeOuro += 5;
+    }
+
+    await atualizarFichaETransmitir(chatId, sender, ficha, `Você gastou ${custoJackpot} FO no Jackpot...\n${premioMsg}\nSeu saldo: ${ficha.florinsDeOuro} FO, ${ficha.essenciaDeArcadia || 0} EA.`);
+}
+// --- FIM DO BLOCO 3 ---
+    // --- NOVAS FUNÇÕES PARA LISTAR INFORMAÇÕES DE ARCÁDIA ---
+async function handleListarRacas(chatId) {
+    let mensagem = "--- 📜 Raças Jogáveis de Arcádia 📜 ---\n\n";
+    RACAS_ARCADIA.forEach(raca => {
+        mensagem += `*${raca.nome}* (${raca.grupo})\n_${raca.desc}_\n\n`;
+    });
+    mensagem += "Use estes nomes ao criar seu personagem com `!criar`.";
+    await enviarMensagemTextoWhapi(chatId, mensagem);
+}
+
+async function handleListarClasses(chatId) {
+    let mensagem = "--- ⚔️ Classes Jogáveis de Arcádia ⚔️ ---\n\n";
+    CLASSES_ARCADIA.forEach(classe => {
+        mensagem += `*${classe.nome}* - ${classe.desc}\n`;
+    });
+    mensagem += "\nUse estes nomes ao criar seu personagem com `!criar`.";
+    await enviarMensagemTextoWhapi(chatId, mensagem);
+}
+
+async function handleListarReinos(chatId) {
+    let mensagem = "--- 🏰 Reinos Principais de Arcádia 🏰 ---\n\n";
+    REINOS_ARCADIA.forEach(reino => {
+        mensagem += `*${reino.nome}* - ${reino.desc}\n\n`;
+    });
+    mensagem += "Use estes nomes como seu Reino de Origem ao criar seu personagem com `!criar`.";
+    await enviarMensagemTextoWhapi(chatId, mensagem);
+}
+
+
+async function handleComandosArcadia(chatId, senderIsOwner) {
+    let resposta = "📜 --- Comandos de Arcádia --- 📜\n\n";
+    resposta += "`!arcadia` ou `!bemvindo` - Mensagem de boas-vindas.\n";
+    resposta += "`!ping` - Testa a conexão.\n";
+    resposta += "`!criar <nome>;<raça>;<classe>;<reino>` - Cria sua ficha.\n   (Use `!listaracas`, `!listaclasses`, `!listareinos` para ajuda)\n";
+    resposta += "`!ficha` - Mostra sua ficha atual.\n";
+    resposta += "`!distribuirpontos <atr> <qtd>` - Distribui seus pontos de atributo.\n   (Atributos: forca, agilidade, vitalidade, manaBase, intelecto, carisma)\n";
+    resposta += "`!jackpot` - Tente sua sorte! (Custa 25 Florins)\n";
+    resposta += "\n--- Comandos Informativos ---\n";
+    resposta += "`!listaracas`\n`!listaclasses`\n`!listareinos`\n";
+    
+    if (senderIsOwner) {
+        resposta += "\n--- Comandos de Admin (Proprietário) ---\n";
+        resposta += "`!ficha <ID_ALVO>` - Mostra a ficha do ID_ALVO (só números).\n";
+        resposta += "`!admincriar <ID_ALVO>;<nome>;<raça>;<classe>;<reino>`\n   Cria/sobrescreve ficha para ID_ALVO.\n";
+        resposta += "`!adminaddxp <ID_ALVO> <valor>` - Adiciona XP e calcula level up.\n";
+        resposta += "`!adminsetnivel <ID_ALVO> <nível>` - Define nível e XP.\n";
+        resposta += "`!adminaddflorins <ID_ALVO> <valor>`\n";
+        resposta += "`!adminaddessencia <ID_ALVO> <valor>`\n";
+        resposta += "`!adminadditem <ID_ALVO> <item>[;qtd;tipo;desc]`\n";
+        resposta += "`!admindelitem <ID_ALVO> <item>[;qtd]`\n";
+        resposta += "`!adminsetattr <ID_ALVO> <atributo> <valor>`\n";
+        resposta += "`!adminaddpontosattr <ID_ALVO> <quantidade>`\n";
+    }
+    
+    // Comandos de edição da própria ficha para jogadores permitidos já estão na seção de comandos comuns se forem diferentes dos de admin.
+    // Se os comandos de edição da própria ficha (como !addxp) forem os mesmos para owner e player, eles são tratados no switch principal.
+    
+    resposta += "\n`!comandos` ou `!help` - Mostra esta lista.\n";
+    await enviarMensagemTextoWhapi(chatId, resposta);
+}
+
+// --- FUNÇÃO PARA ENVIAR MENSAGENS ---
+async function enviarMensagemTextoWhapi(para, mensagem) {
+    if (!WHAPI_API_TOKEN) {
+        console.error("Token do Whapi não configurado para envio.");
+        return;
+    }
+    const endpoint = "/messages/text";
+    const urlDeEnvio = `${WHAPI_BASE_URL}${endpoint}`;
+    const payload = { "to": para, "body": mensagem };
+    const headers = {
+        'Authorization': `Bearer ${WHAPI_API_TOKEN}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    };
+    try {
+        await axios.post(urlDeEnvio, payload, { headers: headers });
+    } catch (error) {
+        console.error('Erro ao enviar mensagem TEXTO pelo Whapi:');
+        if (error.response) {
+            console.error('Status do Erro:', error.response.status);
+            console.error('Dados do Erro:', JSON.stringify(error.response.data, null, 2));
+        } else {
+            console.error('Mensagem de Erro:', error.message);
+        }
+    }
+}
+// --- FIM DO BLOCO 4 ---
+// --- ROTA DE WEBHOOK ---
 app.post('/webhook/whatsapp', async (req, res) => {
     console.log('----------------------------------------------------');
     console.log('>>> Webhook do Whapi Recebido! <<<');
@@ -541,13 +1053,13 @@ app.post('/webhook/whatsapp', async (req, res) => {
                         await handleListarClasses(chatId);
                     } else if (comando === 'listareinos') {
                         await handleListarReinos(chatId);
-                    } else if (comando === 'criar') { // Agora é !criar para Arcádia
+                    } else if (comando === 'criar') { 
                         await handleCriarFichaArcadia(chatId, sender, senderName, args);
                     } else if (comando === 'ficha' || comando === 'minhaficha' || comando === 'verficha') {
                         if (isOwner && args.length > 0 && comando !== 'minhaficha') {
-                            await handleVerFichaArcadia(chatId, sender, args); // Owner vendo ficha de outro
+                            await handleVerFichaArcadia(chatId, sender, args); 
                         } else {
-                            await handleVerFichaArcadia(chatId, sender, []); // Jogador vendo a própria ficha (ou owner vendo a própria)
+                            await handleVerFichaArcadia(chatId, sender, []); 
                         }
                     } else if (comando === 'distribuirpontos') {
                          await handleDistribuirPontos(chatId, sender, args);
@@ -560,7 +1072,7 @@ app.post('/webhook/whatsapp', async (req, res) => {
                     else if (isOwner) {
                         switch (comando) {
                             // Comandos de admin para gerenciar fichas de outros
-                            case 'admincriar': // Admin criando para Arcádia
+                            case 'admincriar': 
                                 await handleAdminCriarFichaArcadia(chatId, sender, args);
                                 break;
                             case 'adminaddxp':
@@ -643,8 +1155,7 @@ app.post('/webhook/whatsapp', async (req, res) => {
     }
     res.status(200).send('OK');
 }); // Fim do app.post
-// --- BLOCO 3 (REVISADO) TERMINA AQUI ---
-// O próximo bloco (Bloco 4 - Final) começará com a rota app.get('/', ...)
+
 // --- ROTA DE TESTE E INICIALIZAÇÃO DO SERVIDOR ---
 app.get('/', (req, res) => {
     res.send('Servidor do Bot de RPG Arcádia (Whapi no Render com MongoDB) está operacional!');
