@@ -1,12 +1,12 @@
 // Nome do arquivo: bot_baileys.js
-// RPG: Arc·dia - A Era dos Reinos
+// RPG: Arc√°dia - A Era dos Reinos
 
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const { MongoClient, ObjectId } = require('mongodb');
 
-// --- CONFIGURA«√O DE AMBIENTE E IDs ---
+// --- CONFIGURA√á√ÉO DE AMBIENTE E IDs ---
 const OWNER_ID = process.env.OWNER_ID ? process.env.OWNER_ID.trim() : "";
 const JOGADORES_PERMITIDOS_IDS_STRING = process.env.JOGADORES_PERMITIDOS_IDS || "";
 const listaJogadoresPermitidos = new Set(
@@ -15,47 +15,47 @@ const listaJogadoresPermitidos = new Set(
         .filter(id => id && /^\d+$/.test(id)) 
 );
 
-// --- CONSTANTES DE ARC¡DIA (PARA OS COMANDOS DE LISTAGEM) ---
+// --- CONSTANTES DE ARC√ÅDIA (PARA OS COMANDOS DE LISTAGEM) ---
 const RACAS_ARCADIA = [
-    { nome: "Eldari", grupo: "Puros", desc: "Elfos nobres com domÌnio natural da magia arcana. Vivem em florestas encantadas." },
-    { nome: "Valtheran", grupo: "Puros", desc: "Anıes de montanhas profundas, exÌmios forjadores e guerreiros." },
-    { nome: "Seraphim", grupo: "Puros", desc: "RaÁa alada de aparÍncia angelical, guardiıes antigos de templos m·gicos." },
-    { nome: "Terrano", grupo: "Humanos", desc: "Humanos comuns, adapt·veis e vers·teis." },
-    { nome: "Vharen", grupo: "Humanos", desc: "Humanos com sangue de antigos magos, sensÌveis ‡ magia." },
-    { nome: "Drakyn", grupo: "Humanos", desc: "Humanos com linhagem de dragıes, com habilidades fÌsicas e m·gicas elevadas." },
-    { nome: "Mei'ra", grupo: "Mistos", desc: "Meio-elfos, diplom·ticos e ligados ‡ natureza." },
-    { nome: "Thornak", grupo: "Mistos", desc: "Meio-orcs, fortes e leais, muitas vezes caÁados por seu sangue misto." },
-    { nome: "Lunari", grupo: "Mistos", desc: "Descendentes de humanos e Seraphim, possuem magia ligada ‡ lua e sonhos." }
+    { nome: "Eldari", grupo: "Puros", desc: "Elfos nobres com dom√≠nio natural da magia arcana. Vivem em florestas encantadas." },
+    { nome: "Valtheran", grupo: "Puros", desc: "An√µes de montanhas profundas, ex√≠mios forjadores e guerreiros." },
+    { nome: "Seraphim", grupo: "Puros", desc: "Ra√ßa alada de apar√™ncia angelical, guardi√µes antigos de templos m√°gicos." },
+    { nome: "Terrano", grupo: "Humanos", desc: "Humanos comuns, adapt√°veis e vers√°teis." },
+    { nome: "Vharen", grupo: "Humanos", desc: "Humanos com sangue de antigos magos, sens√≠veis √† magia." },
+    { nome: "Drakyn", grupo: "Humanos", desc: "Humanos com linhagem de drag√µes, com habilidades f√≠sicas e m√°gicas elevadas." },
+    { nome: "Mei‚Äôra", grupo: "Mistos", desc: "Meio-elfos, diplom√°ticos e ligados √† natureza." },
+    { nome: "Thornak", grupo: "Mistos", desc: "Meio-orcs, fortes e leais, muitas vezes ca√ßados por seu sangue misto." },
+    { nome: "Lunari", grupo: "Mistos", desc: "Descendentes de humanos e Seraphim, possuem magia ligada √† lua e sonhos." }
 ];
 
 const CLASSES_ARCADIA = [
     { nome: "Arcanista", desc: "Mestre da magia pura." },
-    { nome: "Guerreiro Real", desc: "Lutador disciplinado com honra e estratÈgia." },
-    { nome: "Feiticeiro Negro", desc: "Usu·rio de magias proibidas." },
-    { nome: "CaÁador Sombrio", desc: "Perito em rastrear criaturas e inimigos." },
-    { nome: "Guardi„o da Luz", desc: "Defensor divino com escudo e feitiÁos sagrados." },
-    { nome: "Mestre das Bestas", desc: "Controla criaturas m·gicas e animais." },
-    { nome: "Bardo Arcano", desc: "Usa m˙sica e magia para manipular emoÁıes." },
-    { nome: "Alquimista", desc: "Cria bombas, poÁıes e venenos ˙nicos." },
-    { nome: "ClÈrigo da Ordem", desc: "Cura aliados e invoca milagres." },
-    { nome: "Andarilho R˙nico", desc: "Usa runas ancestrais como armas m·gicas." },
-    { nome: "Espadachim EtÈreo", desc: "Guerreiro veloz que une magia e espada." },
-    { nome: "Invasor DracÙnico", desc: "Classe hÌbrida com traÁos de drag„o." },
-    { nome: "L‚mina da NÈvoa", desc: "Assassino furtivo, mestre em ilusıes." },
+    { nome: "Guerreiro Real", desc: "Lutador disciplinado com honra e estrat√©gia." },
+    { nome: "Feiticeiro Negro", desc: "Usu√°rio de magias proibidas." },
+    { nome: "Ca√ßador Sombrio", desc: "Perito em rastrear criaturas e inimigos." },
+    { nome: "Guardi√£o da Luz", desc: "Defensor divino com escudo e feiti√ßos sagrados." },
+    { nome: "Mestre das Bestas", desc: "Controla criaturas m√°gicas e animais." },
+    { nome: "Bardo Arcano", desc: "Usa m√∫sica e magia para manipular emo√ß√µes." },
+    { nome: "Alquimista", desc: "Cria bombas, po√ß√µes e venenos √∫nicos." },
+    { nome: "Cl√©rigo da Ordem", desc: "Cura aliados e invoca milagres." },
+    { nome: "Andarilho R√∫nico", desc: "Usa runas ancestrais como armas m√°gicas." },
+    { nome: "Espadachim Et√©reo", desc: "Guerreiro veloz que une magia e espada." },
+    { nome: "Invasor Drac√¥nico", desc: "Classe h√≠brida com tra√ßos de drag√£o." },
+    { nome: "L√¢mina da N√©voa", desc: "Assassino furtivo, mestre em ilus√µes." },
     { nome: "Conjurador do Vazio", desc: "Controla magias interdimensionais." }
 ];
 
 const REINOS_ARCADIA = [
-    { nome: "Valdoria", desc: "Reino dos humanos. Castelo real, vilarejos e campos fÈrteis." },
+    { nome: "Valdoria", desc: "Reino dos humanos. Castelo real, vilarejos e campos f√©rteis." },
     { nome: "Elarion", desc: "Floresta encantada dos elfos Eldari, lar de magia antiga." },
-    { nome: "Durnholde", desc: "Reino montanhoso dos anıes Valtherans." },
+    { nome: "Durnholde", desc: "Reino montanhoso dos an√µes Valtherans." },
     { nome: "Caelum", desc: "Cidade flutuante dos Seraphim, isolada do resto do mundo." },
-    { nome: "Ravengard", desc: "Terras sombrias, domÌnio dos Sombrios e impuros." },
-    { nome: "Thornmere", desc: "TerritÛrio livre, habitado por Mistos e refugiados." },
-    { nome: "Isle of Morwyn", desc: "Ilha m·gica proibida, berÁo de segredos antigos." }
+    { nome: "Ravengard", desc: "Terras sombrias, dom√≠nio dos Sombrios e impuros." },
+    { nome: "Thornmere", desc: "Territ√≥rio livre, habitado por Mistos e refugiados." },
+    { nome: "Isle of Morwyn", desc: "Ilha m√°gica proibida, ber√ßo de segredos antigos." }
 ];
 
-// --- MODELO DA FICHA DE PERSONAGEM - ARC¡DIA ---
+// --- MODELO DA FICHA DE PERSONAGEM - ARC√ÅDIA ---
 const fichaModeloArcadia = {
     nomeJogadorSalvo: "", 
     nomePersonagem: "N/A",
@@ -80,21 +80,21 @@ const fichaModeloArcadia = {
         elmo: null, amuleto: null, anel1: null, anel2: null,
     },
     inventario: [ 
-        { itemNome: "Adaga Simples", quantidade: 1, tipo: "Arma Leve", descricao: "Uma adaga b·sica de bronze." },
-        { itemNome: "RaÁıes de Viagem", quantidade: 3, tipo: "ConsumÌvel", descricao: "Suficiente para 3 dias." }
+        { itemNome: "Adaga Simples", quantidade: 1, tipo: "Arma Leve", descricao: "Uma adaga b√°sica de bronze." },
+        { itemNome: "Ra√ß√µes de Viagem", quantidade: 3, tipo: "Consum√≠vel", descricao: "Suficiente para 3 dias." }
     ],
-    historiaPersonagem: "", idiomas: ["Comum Arc·diano"], 
+    historiaPersonagem: "", idiomas: ["Comum Arc√°diano"], 
     condicoes: [], 
     ultimaAtualizacao: "", logMissoes: [], notacoesDM: "" 
 };
 
-// --- CONFIGURA«√O DO MONGODB ---
+// --- CONFIGURA√á√ÉO DO MONGODB ---
 const MONGODB_URI = process.env.MONGODB_URI;
 const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'arcadia_rpg_db'; 
 const MONGODB_FICHAS_COLLECTION = process.env.MONGODB_FICHAS_COLLECTION || 'fichas_arcadia'; 
 
-if (!MONGODB_URI) { console.error("--- ERRO FATAL: MONGODB_URI n„o definida! ---"); process.exit(1); }
-if (!OWNER_ID) { console.warn("--- ALERTA: OWNER_ID n„o definida! ---"); }
+if (!MONGODB_URI) { console.error("--- ERRO FATAL: MONGODB_URI n√£o definida! ---"); process.exit(1); }
+if (!OWNER_ID) { console.warn("--- ALERTA: OWNER_ID n√£o definida! ---"); }
 if (JOGADORES_PERMITIDOS_IDS_STRING) { console.log("Jogadores permitidos carregados:", Array.from(listaJogadoresPermitidos)); } 
 else { console.log("Nenhum jogador adicional permitido."); }
 
@@ -102,7 +102,7 @@ let dbClient;
 let fichasCollection;
 let todasAsFichas = {};
 
-// --- FUN«’ES DE BANCO DE DADOS E AUXILIARES ---
+// --- FUN√á√ïES DE BANCO DE DADOS E AUXILIARES ---
 async function conectarMongoDB() {
     try {
         console.log("Tentando conectar ao MongoDB Atlas...");
@@ -110,19 +110,19 @@ async function conectarMongoDB() {
         await dbClient.connect();
         const db = dbClient.db(MONGODB_DB_NAME);
         fichasCollection = db.collection(MONGODB_FICHAS_COLLECTION);
-        console.log("Conectado com sucesso ao MongoDB Atlas e ‡ coleÁ„o:", MONGODB_FICHAS_COLLECTION);
+        console.log("Conectado com sucesso ao MongoDB Atlas e √† cole√ß√£o:", MONGODB_FICHAS_COLLECTION);
     } catch (error) {
-        console.error("ERRO CRÕTICO ao conectar ao MongoDB:", error);
+        console.error("ERRO CR√çTICO ao conectar ao MongoDB:", error);
         process.exit(1);
     }
 }
 
 async function carregarFichasDoDB() {
     if (!fichasCollection) {
-        console.error("ColeÁ„o de fichas n„o inicializada. Carregamento abortado.");
+        console.error("Cole√ß√£o de fichas n√£o inicializada. Carregamento abortado.");
         return;
     }
-    console.log("Carregando fichas do MongoDB para a memÛria...");
+    console.log("Carregando fichas do MongoDB para a mem√≥ria...");
     try {
         const fichasDoDB = await fichasCollection.find({}).toArray();
         todasAsFichas = {};
@@ -130,7 +130,7 @@ async function carregarFichasDoDB() {
             const idJogador = String(fichaDB._id).trim();
             todasAsFichas[idJogador] = { ...fichaDB };
         });
-        console.log(`${Object.keys(todasAsFichas).length} fichas carregadas do DB para a memÛria.`);
+        console.log(`${Object.keys(todasAsFichas).length} fichas carregadas do DB para a mem√≥ria.`);
     } catch (error) {
         console.error("Erro ao carregar fichas do MongoDB:", error);
     }
@@ -138,7 +138,7 @@ async function carregarFichasDoDB() {
 
 async function salvarFichaNoDB(idJogador, fichaData) {
     if (!fichasCollection) {
-        console.error("ColeÁ„o de fichas n„o inicializada. Salvamento abortado para jogador:", idJogador);
+        console.error("Cole√ß√£o de fichas n√£o inicializada. Salvamento abortado para jogador:", idJogador);
         return;
     }
     const idJogadorStr = String(idJogador).trim();
@@ -160,7 +160,7 @@ async function getFichaOuCarregar(idAlvo) {
     const idAlvoTrimmado = String(idAlvo).trim();
     let ficha = todasAsFichas[idAlvoTrimmado];
     if (!ficha && fichasCollection) {
-        console.log(`Ficha para ${idAlvoTrimmado} n„o encontrada no cache, buscando no DB...`);
+        console.log(`Ficha para ${idAlvoTrimmado} n√£o encontrada no cache, buscando no DB...`);
         try {
             const fichaDB = await fichasCollection.findOne({ _id: idAlvoTrimmado });
             if (fichaDB) {
@@ -222,7 +222,7 @@ function calcularXpProximoNivel(nivelAtual) {
     return nivelAtual * 100 + 50;
 }
 
-// --- CONFIGURA«√O DO SERVIDOR EXPRESS ---
+// --- CONFIGURA√á√ÉO DO SERVIDOR EXPRESS ---
 const app = express();
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
@@ -232,21 +232,21 @@ const WHAPI_API_TOKEN = process.env.WHAPI_API_TOKEN;
 const WHAPI_BASE_URL = "https://gate.whapi.cloud";
 
 if (!WHAPI_API_TOKEN) {
-    console.error("FATAL_ERROR: Vari·vel de ambiente WHAPI_API_TOKEN n„o definida!");
+    console.error("FATAL_ERROR: Vari√°vel de ambiente WHAPI_API_TOKEN n√£o definida!");
 }
 
-// --- FUN«’ES DE COMANDO DO RPG - ARC¡DIA ---
+// --- FUN√á√ïES DE COMANDO DO RPG - ARC√ÅDIA ---
 
 async function handleCriarFichaArcadia(chatId, sender, senderName, args) {
     const idJogador = sender;
     if (todasAsFichas[idJogador]) {
-        await enviarMensagemTextoWhapi(chatId, `VocÍ j· possui um personagem em Arc·dia: ${todasAsFichas[idJogador].nomePersonagem}. Por enquanto, apenas um personagem por jogador.`);
+        await enviarMensagemTextoWhapi(chatId, `Voc√™ j√° possui um personagem em Arc√°dia: ${todasAsFichas[idJogador].nomePersonagem}. Por enquanto, apenas um personagem por jogador.`);
         return;
     }
     const dadosComando = args.join(' ');
     const partes = dadosComando.split(';').map(p => p.trim());
     if (partes.length < 4) {
-        await enviarMensagemTextoWhapi(chatId, "Formato incorreto! Uso: `!criar <Nome Personagem>;<RaÁa>;<Classe>;<Reino Origem>`\nUse `!listaracas`, `!listaclasses`, `!listareinos` para ver as opÁıes.");
+        await enviarMensagemTextoWhapi(chatId, "Formato incorreto! Uso: `!criar <Nome Personagem>;<Ra√ßa>;<Classe>;<Reino Origem>`\nUse `!listaracas`, `!listaclasses`, `!listareinos` para ver as op√ß√µes.");
         return;
     }
     const nomePersonagemInput = partes[0];
@@ -259,15 +259,15 @@ async function handleCriarFichaArcadia(chatId, sender, senderName, args) {
     const reinoValido = REINOS_ARCADIA.find(reino => reino.nome.toLowerCase() === origemReinoInput.toLowerCase());
 
     if (!racaValida) {
-        await enviarMensagemTextoWhapi(chatId, `RaÁa "${racaInput}" inv·lida. Use \`!listaracas\` para ver as opÁıes.`);
+        await enviarMensagemTextoWhapi(chatId, `Ra√ßa "${racaInput}" inv√°lida. Use \`!listaracas\` para ver as op√ß√µes.`);
         return;
     }
     if (!classeValida) {
-        await enviarMensagemTextoWhapi(chatId, `Classe "${classeInput}" inv·lida. Use \`!listaclasses\` para ver as opÁıes.`);
+        await enviarMensagemTextoWhapi(chatId, `Classe "${classeInput}" inv√°lida. Use \`!listaclasses\` para ver as op√ß√µes.`);
         return;
     }
      if (!reinoValido) {
-        await enviarMensagemTextoWhapi(chatId, `Reino de Origem "${origemReinoInput}" inv·lido. Use \`!listareinos\` para ver as opÁıes.`);
+        await enviarMensagemTextoWhapi(chatId, `Reino de Origem "${origemReinoInput}" inv√°lido. Use \`!listareinos\` para ver as op√ß√µes.`);
         return;
     }
 
@@ -284,14 +284,14 @@ async function handleCriarFichaArcadia(chatId, sender, senderName, args) {
     novaFicha.pmMax = (novaFicha.atributos.manaBase * 5) + (novaFicha.nivel * 3) + 10;
     novaFicha.pmAtual = novaFicha.pmMax;
     novaFicha.xpProximoNivel = calcularXpProximoNivel(novaFicha.nivel);
-    await atualizarFichaETransmitir(chatId, idJogador, novaFicha, `?? Personagem ${nomePersonagemInput} (${novaFicha.raca} ${novaFicha.classe} de ${novaFicha.origemReino}) criado para Arc·dia!\nUse \`!distribuirpontos <atributo> <valor>\` para usar seus ${novaFicha.atributos.pontosParaDistribuir} pontos iniciais.\nUse \`!ficha\` para ver os detalhes.`);
+    await atualizarFichaETransmitir(chatId, idJogador, novaFicha, `üéâ Personagem ${nomePersonagemInput} (${novaFicha.raca} ${novaFicha.classe} de ${novaFicha.origemReino}) criado para Arc√°dia!\nUse \`!distribuirpontos <atributo> <valor>\` para usar seus ${novaFicha.atributos.pontosParaDistribuir} pontos iniciais.\nUse \`!ficha\` para ver os detalhes.`);
 }
 
 async function handleAdminCriarFichaArcadia(chatId, senderOwner, argsAdmin) {
     const comandoCompleto = argsAdmin.join(" ");
     const partesPrincipais = comandoCompleto.split(';');
     if (partesPrincipais.length < 5) { 
-        await enviarMensagemTextoWhapi(chatId, "Formato incorreto! Uso: `!admincriar <ID_ALVO>;<Nome Personagem>;<RaÁa>;<Classe>;<ReinoOrigem>`\nID_ALVO È sÛ o n˙mero (ex: 5577...). Use `!listaracas`, etc. para opÁıes.");
+        await enviarMensagemTextoWhapi(chatId, "Formato incorreto! Uso: `!admincriar <ID_ALVO>;<Nome Personagem>;<Ra√ßa>;<Classe>;<ReinoOrigem>`\nID_ALVO √© s√≥ o n√∫mero (ex: 5577...). Use `!listaracas`, etc. para op√ß√µes.");
         return;
     }
 
@@ -302,7 +302,7 @@ async function handleAdminCriarFichaArcadia(chatId, senderOwner, argsAdmin) {
     const origemReinoInput = partesPrincipais[4].trim();
 
     if (!/^\d+$/.test(idJogadorAlvo)) {
-        await enviarMensagemTextoWhapi(chatId, `ID do Jogador Alvo (${idJogadorAlvo}) inv·lido. Deve conter apenas n˙meros.`);
+        await enviarMensagemTextoWhapi(chatId, `ID do Jogador Alvo (${idJogadorAlvo}) inv√°lido. Deve conter apenas n√∫meros.`);
         return;
     }
     
@@ -311,15 +311,15 @@ async function handleAdminCriarFichaArcadia(chatId, senderOwner, argsAdmin) {
     const reinoValido = REINOS_ARCADIA.find(reino => reino.nome.toLowerCase() === origemReinoInput.toLowerCase());
 
     if (!racaValida) {
-        await enviarMensagemTextoWhapi(chatId, `RaÁa "${racaInput}" inv·lida para o ID ${idJogadorAlvo}. Use \`!listaracas\` para ver as opÁıes.`);
+        await enviarMensagemTextoWhapi(chatId, `Ra√ßa "${racaInput}" inv√°lida para o ID ${idJogadorAlvo}. Use \`!listaracas\` para ver as op√ß√µes.`);
         return;
     }
     if (!classeValida) {
-        await enviarMensagemTextoWhapi(chatId, `Classe "${classeInput}" inv·lida para o ID ${idJogadorAlvo}. Use \`!listaclasses\` para ver as opÁıes.`);
+        await enviarMensagemTextoWhapi(chatId, `Classe "${classeInput}" inv√°lida para o ID ${idJogadorAlvo}. Use \`!listaclasses\` para ver as op√ß√µes.`);
         return;
     }
     if (!reinoValido) {
-        await enviarMensagemTextoWhapi(chatId, `Reino de Origem "${origemReinoInput}" inv·lido para o ID ${idJogadorAlvo}. Use \`!listareinos\` para ver as opÁıes.`);
+        await enviarMensagemTextoWhapi(chatId, `Reino de Origem "${origemReinoInput}" inv√°lido para o ID ${idJogadorAlvo}. Use \`!listareinos\` para ver as op√ß√µes.`);
         return;
     }
     
@@ -338,7 +338,7 @@ async function handleAdminCriarFichaArcadia(chatId, senderOwner, argsAdmin) {
     novaFicha.xpProximoNivel = calcularXpProximoNivel(novaFicha.nivel);
     
     todasAsFichas[idJogadorAlvo] = novaFicha;
-    await atualizarFichaETransmitir(chatId, idJogadorAlvo, novaFicha, `?? [Admin] Personagem ${nomePersonagemInput} (${novaFicha.raca} ${novaFicha.classe}) CRIADO/ATUALIZADO para o ID ${idJogadorAlvo}.`);
+    await atualizarFichaETransmitir(chatId, idJogadorAlvo, novaFicha, `üéâ [Admin] Personagem ${nomePersonagemInput} (${novaFicha.raca} ${novaFicha.classe}) CRIADO/ATUALIZADO para o ID ${idJogadorAlvo}.`);
 }
 
 async function handleVerFichaArcadia(chatId, sender, args) {
@@ -350,9 +350,9 @@ async function handleVerFichaArcadia(chatId, sender, args) {
         if (/^\d+$/.test(idPotencial)) { 
             idAlvoConsulta = idPotencial;
             adminConsultandoOutro = true;
-            console.log(`[Admin] ${sender} est· consultando a ficha do ID_ALVO: ${idAlvoConsulta}`);
+            console.log(`[Admin] ${sender} est√° consultando a ficha do ID_ALVO: ${idAlvoConsulta}`);
         } else {
-            await enviarMensagemTextoWhapi(chatId, "ID do jogador alvo inv·lido para `!ficha`. ForneÁa apenas n˙meros.");
+            await enviarMensagemTextoWhapi(chatId, "ID do jogador alvo inv√°lido para `!ficha`. Forne√ßa apenas n√∫meros.");
             return;
         }
     }
@@ -360,71 +360,71 @@ async function handleVerFichaArcadia(chatId, sender, args) {
     const ficha = await getFichaOuCarregar(idAlvoConsulta);
     if (!ficha) {
         const msgErro = adminConsultandoOutro 
-            ? `? Ficha n„o encontrada para o ID ${idAlvoConsulta} em Arc·dia.\nUse \`!admincriar\` para criar uma.`
-            : "? VocÍ ainda n„o tem um personagem em Arc·dia. Use o comando `!criar` para criar um.";
+            ? `‚ùå Ficha n√£o encontrada para o ID ${idAlvoConsulta} em Arc√°dia.\nUse \`!admincriar\` para criar uma.`
+            : "‚ùå Voc√™ ainda n√£o tem um personagem em Arc√°dia. Use o comando `!criar` para criar um.";
         await enviarMensagemTextoWhapi(chatId, msgErro);
         return;
     }
 
-    let resposta = `?? --- Ficha de Arc·dia: ${ficha.nomePersonagem || 'Personagem Sem Nome'} (@${idAlvoConsulta}) --- ??\n`;
-    if (ficha.nomeJogadorSalvo) resposta += `?? Jogador: ${ficha.nomeJogadorSalvo}\n`;
-    resposta += `RaÁa: ${ficha.raca || 'N/A'} | Classe: ${ficha.classe || 'N/A'}\n`;
+    let resposta = `üåü --- Ficha de Arc√°dia: ${ficha.nomePersonagem || 'Personagem Sem Nome'} (@${idAlvoConsulta}) --- üåü\n`;
+    if (ficha.nomeJogadorSalvo) resposta += `üßô Jogador: ${ficha.nomeJogadorSalvo}\n`;
+    resposta += `Ra√ßa: ${ficha.raca || 'N/A'} | Classe: ${ficha.classe || 'N/A'}\n`;
     resposta += `Origem: ${ficha.origemReino || 'N/A'}\n`;
     resposta += `Lvl: ${ficha.nivel || 1} (XP: ${ficha.xpAtual || 0}/${ficha.xpProximoNivel || calcularXpProximoNivel(ficha.nivel || 1)})\n`;
     resposta += `HP: ${ficha.pvAtual || 0}/${ficha.pvMax || 0}\n`;
     resposta += `MP: ${ficha.pmAtual || 0}/${ficha.pmMax || 0}\n`;
-    resposta += `Florins: ${ficha.florinsDeOuro || 0} FO | EssÍncia: ${ficha.essenciaDeArcadia || 0} EA\n`;
+    resposta += `Florins: ${ficha.florinsDeOuro || 0} FO | Ess√™ncia: ${ficha.essenciaDeArcadia || 0} EA\n`;
 
-    resposta += "\n?? Atributos:\n";
+    resposta += "\nüß† Atributos:\n";
     if (ficha.atributos) {
         for (const [attr, valor] of Object.entries(ficha.atributos)) {
             const nomeAttrCapitalized = attr.charAt(0).toUpperCase() + attr.slice(1);
             if (attr !== "pontosParaDistribuir") {
-                resposta += `  ? ${nomeAttrCapitalized}: ${valor || 0}\n`;
+                resposta += `  ‚òÜ ${nomeAttrCapitalized}: ${valor || 0}\n`;
             }
         }
         if ((ficha.atributos.pontosParaDistribuir || 0) > 0) {
-            const msgPontos = adminConsultandoOutro ? "O jogador tem" : "VocÍ tem";
+            const msgPontos = adminConsultandoOutro ? "O jogador tem" : "Voc√™ tem";
             const cmdDistribuir = adminConsultandoOutro ? "" : " (`!distribuirpontos`)";
-            resposta += `  ? ${msgPontos} ${ficha.atributos.pontosParaDistribuir} pontos para distribuir${cmdDistribuir}.\n`;
+            resposta += `  ‚ú® ${msgPontos} ${ficha.atributos.pontosParaDistribuir} pontos para distribuir${cmdDistribuir}.\n`;
         }
     } else {
-        resposta += "  (Atributos n„o definidos)\n";
+        resposta += "  (Atributos n√£o definidos)\n";
     }
     
-    resposta += "\n?? Habilidades Especiais / PerÌcias:\n";
+    resposta += "\nüìú Habilidades Especiais / Per√≠cias:\n";
     let habilidadesTexto = "";
     if (ficha.habilidadesEspeciais && ficha.habilidadesEspeciais.length > 0) {
-        ficha.habilidadesEspeciais.forEach(h => habilidadesTexto += `  ? ${h.nome} (${h.tipo || 'Habilidade'}): ${h.descricao || ''}\n`);
+        ficha.habilidadesEspeciais.forEach(h => habilidadesTexto += `  ‚òÜ ${h.nome} (${h.tipo || 'Habilidade'}): ${h.descricao || ''}\n`);
     }
     if (ficha.pericias && ficha.pericias.length > 0) {
-        ficha.pericias.forEach(p => habilidadesTexto += `  ? PerÌcia em ${p.nome}: ${p.valor}\n`);
+        ficha.pericias.forEach(p => habilidadesTexto += `  ‚òÜ Per√≠cia em ${p.nome}: ${p.valor}\n`);
     }
     resposta += habilidadesTexto || "  (Nenhuma listada)\n";
 
-    resposta += "\n?? Magias Conhecidas:\n";
+    resposta += "\nüîÆ Magias Conhecidas:\n";
     if (ficha.magiasConhecidas && ficha.magiasConhecidas.length > 0) {
-        ficha.magiasConhecidas.forEach(m => resposta += `  ? ${m.nome} (Custo: ${m.custoMana || 'N/A'} PM): ${m.descricao || ''}\n`);
+        ficha.magiasConhecidas.forEach(m => resposta += `  ‚òÜ ${m.nome} (Custo: ${m.custoMana || 'N/A'} PM): ${m.descricao || ''}\n`);
     } else {
         resposta += "  (Nenhuma magia conhecida)\n";
     }
 
-    resposta += "\n?? Invent·rio:\n";
+    resposta += "\nüéí Invent√°rio:\n";
     if (ficha.inventario && ficha.inventario.length > 0) {
         ficha.inventario.forEach(i => {
-            resposta += `  ? ${i.itemNome} (Qtd: ${i.quantidade || 1}) ${i.tipo ? '['+i.tipo+']' : ''} ${i.descricao ? '- ' + i.descricao : ''}\n`;
+            resposta += `  ‚òÜ ${i.itemNome} (Qtd: ${i.quantidade || 1}) ${i.tipo ? '['+i.tipo+']' : ''} ${i.descricao ? '- ' + i.descricao : ''}\n`;
         });
     } else {
         resposta += "  (Vazio)\n";
     }
     
-    resposta += "\n?? Equipamento:\n";
+    resposta += "\n‚öôÔ∏è Equipamento:\n";
     let temEquip = false;
     if (ficha.equipamento) {
         for(const slot in ficha.equipamento) {
             if (ficha.equipamento[slot]) {
                 const nomeSlot = slot.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                resposta += `  ? ${nomeSlot}: ${typeof ficha.equipamento[slot] === 'object' ? ficha.equipamento[slot].itemNome : ficha.equipamento[slot]}\n`;
+                resposta += `  ‚òÜ ${nomeSlot}: ${typeof ficha.equipamento[slot] === 'object' ? ficha.equipamento[slot].itemNome : ficha.equipamento[slot]}\n`;
                 temEquip = true;
             }
         }
@@ -433,14 +433,14 @@ async function handleVerFichaArcadia(chatId, sender, args) {
         resposta += "  (Nenhum item equipado)\n";
     }
     
-    resposta += `\n?? ⁄ltima atualizaÁ„o: ${ficha.ultimaAtualizacao || 'N/A'}\n`;
+    resposta += `\nüïí √öltima atualiza√ß√£o: ${ficha.ultimaAtualizacao || 'N/A'}\n`;
     await enviarMensagemTextoWhapi(chatId, resposta);
 }
 
 async function handleAddXPArcadia(chatId, sender, args) {
     const ficha = await getFichaOuCarregar(sender);
     if (!ficha) {
-        await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arc·dia n„o foi encontrada. Crie uma com `!criar`.");
+        await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arc√°dia n√£o foi encontrada. Crie uma com `!criar`.");
         return;
     }
     if (args.length === 0 || isNaN(parseInt(args[0]))) {
@@ -468,7 +468,7 @@ async function handleAddXPArcadia(chatId, sender, args) {
         ficha.pvAtual = ficha.pvMax; 
         ficha.pmAtual = ficha.pmMax;
 
-        mensagensLevelUp.push(`?? PARAB…NS! VocÍ alcanÁou o NÌvel ${ficha.nivel} em Arc·dia! Ganhou ${pvGanho} PV, ${pmGanho} PM e 2 pontos de atributo!`);
+        mensagensLevelUp.push(`üéâ PARAB√âNS! Voc√™ alcan√ßou o N√≠vel ${ficha.nivel} em Arc√°dia! Ganhou ${pvGanho} PV, ${pmGanho} PM e 2 pontos de atributo!`);
         ficha.xpProximoNivel = calcularXpProximoNivel(ficha.nivel);
     }
 
@@ -482,7 +482,7 @@ async function handleAddXPArcadia(chatId, sender, args) {
 
 async function handleSetNivelArcadia(chatId, sender, args) {
     const ficha = await getFichaOuCarregar(sender);
-    if (!ficha) { await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arc·dia n„o foi encontrada."); return; }
+    if (!ficha) { await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arc√°dia n√£o foi encontrada."); return; }
     if (args.length === 0 || isNaN(parseInt(args[0])) || parseInt(args[0]) < 1) { await enviarMensagemTextoWhapi(chatId, "Uso: `!setnivel <novo_nivel_numerico_maior_que_0>`.\nExemplo: `!setnivel 3`"); return; }
     const novoNivel = parseInt(args[0]); 
     const nivelAntigo = ficha.nivel || 1;
@@ -496,40 +496,40 @@ async function handleSetNivelArcadia(chatId, sender, args) {
     if (diffNivel > 0) { 
         ficha.atributos.pontosParaDistribuir = (ficha.atributos.pontosParaDistribuir || 0) + (diffNivel * 2);
     }
-    await atualizarFichaETransmitir(chatId, sender, ficha, `NÌvel atualizado para ${ficha.nivel}. XP zerado. PrÛximo nÌvel: ${ficha.xpProximoNivel} XP. Pontos p/ distribuir: ${ficha.atributos.pontosParaDistribuir || 0}.`);
+    await atualizarFichaETransmitir(chatId, sender, ficha, `N√≠vel atualizado para ${ficha.nivel}. XP zerado. Pr√≥ximo n√≠vel: ${ficha.xpProximoNivel} XP. Pontos p/ distribuir: ${ficha.atributos.pontosParaDistribuir || 0}.`);
 }
 
 async function handleAddFlorins(chatId, sender, args) { 
     const ficha = await getFichaOuCarregar(sender);
-    if (!ficha) { await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arc·dia n„o foi encontrada."); return; }
+    if (!ficha) { await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arc√°dia n√£o foi encontrada."); return; }
     if (args.length === 0 || isNaN(parseInt(args[0]))) { await enviarMensagemTextoWhapi(chatId, "Uso: `!addflorins <valor_numerico>`.\nExemplo: `!addflorins 100` ou `!addflorins -20`"); return; }
     const valorFlorins = parseInt(args[0]);
     ficha.florinsDeOuro = (ficha.florinsDeOuro || 0) + valorFlorins;
     if (ficha.florinsDeOuro < 0) ficha.florinsDeOuro = 0;
-    await atualizarFichaETransmitir(chatId, sender, ficha, `Florins de Ouro atualizados! VocÍ agora tem ${ficha.florinsDeOuro} FO.`);
+    await atualizarFichaETransmitir(chatId, sender, ficha, `Florins de Ouro atualizados! Voc√™ agora tem ${ficha.florinsDeOuro} FO.`);
 }
 
 async function handleAddEssencia(chatId, sender, args) {
     const ficha = await getFichaOuCarregar(sender);
-    if (!ficha) { await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arc·dia n„o foi encontrada."); return; }
+    if (!ficha) { await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arc√°dia n√£o foi encontrada."); return; }
     if (args.length === 0 || isNaN(parseInt(args[0]))) { await enviarMensagemTextoWhapi(chatId, "Uso: `!addessencia <valor_numerico>`.\nExemplo: `!addessencia 10` ou `!addessencia -2`"); return; }
     const valorEssencia = parseInt(args[0]);
     ficha.essenciaDeArcadia = (ficha.essenciaDeArcadia || 0) + valorEssencia;
     if (ficha.essenciaDeArcadia < 0) ficha.essenciaDeArcadia = 0;
-    await atualizarFichaETransmitir(chatId, sender, ficha, `EssÍncia de Arc·dia atualizada! VocÍ agora tem ${ficha.essenciaDeArcadia} EA.`);
+    await atualizarFichaETransmitir(chatId, sender, ficha, `Ess√™ncia de Arc√°dia atualizada! Voc√™ agora tem ${ficha.essenciaDeArcadia} EA.`);
 }
 
 async function handleAddItemArcadia(chatId, sender, args) {
     const ficha = await getFichaOuCarregar(sender);
-    if (!ficha) { await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arc·dia n„o foi encontrada."); return; }
+    if (!ficha) { await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arc√°dia n√£o foi encontrada."); return; }
     const inputCompleto = args.join(" "); 
     const partesItem = inputCompleto.split(';').map(p => p.trim());
-    if (partesItem.length === 0 || !partesItem[0]) { await enviarMensagemTextoWhapi(chatId, "Uso: `!additem <nome do item>[;quantidade;tipo;descricao]`\nExemplo: `!additem Espada Longa;1;Arma MÈdia;L‚mina de aÁo comum`"); return; }
+    if (partesItem.length === 0 || !partesItem[0]) { await enviarMensagemTextoWhapi(chatId, "Uso: `!additem <nome do item>[;quantidade;tipo;descricao]`\nExemplo: `!additem Espada Longa;1;Arma M√©dia;L√¢mina de a√ßo comum`"); return; }
     const nomeItem = partesItem[0]; 
     const quantidade = partesItem[1] ? parseInt(partesItem[1]) : 1;
     const tipoItem = partesItem[2] || "Item"; 
     const descricaoItem = partesItem[3] || "";
-    if (isNaN(quantidade) || quantidade < 1) { await enviarMensagemTextoWhapi(chatId, "Quantidade inv·lida. Deve ser um n˙mero maior que 0."); return; }
+    if (isNaN(quantidade) || quantidade < 1) { await enviarMensagemTextoWhapi(chatId, "Quantidade inv√°lida. Deve ser um n√∫mero maior que 0."); return; }
     if (!ficha.inventario) ficha.inventario = []; 
     const itemExistenteIndex = ficha.inventario.findIndex(i => i.itemNome.toLowerCase() === nomeItem.toLowerCase());
     if (itemExistenteIndex > -1) {
@@ -539,27 +539,27 @@ async function handleAddItemArcadia(chatId, sender, args) {
         await atualizarFichaETransmitir(chatId, sender, ficha, `Quantidade de "${nomeItem}" aumentada para ${ficha.inventario[itemExistenteIndex].quantidade}.`);
     } else {
         ficha.inventario.push({ itemNome: nomeItem, quantidade: quantidade, tipo: tipoItem, descricao: descricaoItem });
-        await atualizarFichaETransmitir(chatId, sender, ficha, `"${nomeItem}" (x${quantidade}) adicionado ao seu invent·rio.`);
+        await atualizarFichaETransmitir(chatId, sender, ficha, `"${nomeItem}" (x${quantidade}) adicionado ao seu invent√°rio.`);
     }
 }
 
 async function handleDelItemArcadia(chatId, sender, args) {
     const ficha = await getFichaOuCarregar(sender);
-    if (!ficha || !ficha.inventario) { await enviarMensagemTextoWhapi(chatId, "Sua ficha ou invent·rio n„o foi encontrado."); return; }
+    if (!ficha || !ficha.inventario) { await enviarMensagemTextoWhapi(chatId, "Sua ficha ou invent√°rio n√£o foi encontrado."); return; }
     const inputCompleto = args.join(" "); 
     const partesItem = inputCompleto.split(';').map(p => p.trim());
     if (partesItem.length === 0 || !partesItem[0]) { await enviarMensagemTextoWhapi(chatId, "Uso: `!delitem <nome do item>[;quantidade]`\nExemplo: `!delitem Adaga Simples;1`"); return; }
     const nomeItem = partesItem[0]; 
     const quantidadeRemover = partesItem[1] ? parseInt(partesItem[1]) : 1;
-    if (isNaN(quantidadeRemover) || quantidadeRemover < 1) { await enviarMensagemTextoWhapi(chatId, "Quantidade a remover inv·lida. Deve ser um n˙mero maior que 0."); return; }
+    if (isNaN(quantidadeRemover) || quantidadeRemover < 1) { await enviarMensagemTextoWhapi(chatId, "Quantidade a remover inv√°lida. Deve ser um n√∫mero maior que 0."); return; }
     const itemExistenteIndex = ficha.inventario.findIndex(i => i.itemNome.toLowerCase() === nomeItem.toLowerCase());
-    if (itemExistenteIndex === -1) { await enviarMensagemTextoWhapi(chatId, `Item "${nomeItem}" n„o encontrado no seu invent·rio.`); return; }
+    if (itemExistenteIndex === -1) { await enviarMensagemTextoWhapi(chatId, `Item "${nomeItem}" n√£o encontrado no seu invent√°rio.`); return; }
     
     const nomeItemOriginal = ficha.inventario[itemExistenteIndex].itemNome;
     ficha.inventario[itemExistenteIndex].quantidade -= quantidadeRemover;
     if (ficha.inventario[itemExistenteIndex].quantidade <= 0) {
         ficha.inventario.splice(itemExistenteIndex, 1);
-        await atualizarFichaETransmitir(chatId, sender, ficha, `"${nomeItemOriginal}" removido completamente do seu invent·rio.`);
+        await atualizarFichaETransmitir(chatId, sender, ficha, `"${nomeItemOriginal}" removido completamente do seu invent√°rio.`);
     } else {
         await atualizarFichaETransmitir(chatId, sender, ficha, `${quantidadeRemover} unidade(s) de "${nomeItemOriginal}" removida(s). Restam ${ficha.inventario[itemExistenteIndex].quantidade}.`);
     }
@@ -572,12 +572,12 @@ async function handleAdminComandoFichaArcadia(chatId, args, tipoComando, callbac
     }
     const idAlvo = args[0].trim();
     if (!/^\d+$/.test(idAlvo)) {
-        await enviarMensagemTextoWhapi(chatId, `ID do Jogador Alvo (${idAlvo}) inv·lido. Deve conter apenas n˙meros.`);
+        await enviarMensagemTextoWhapi(chatId, `ID do Jogador Alvo (${idAlvo}) inv√°lido. Deve conter apenas n√∫meros.`);
         return;
     }
     const fichaAlvo = await getFichaOuCarregar(idAlvo);
     if (!fichaAlvo) {
-        await enviarMensagemTextoWhapi(chatId, `Ficha n„o encontrada para o ID ${idAlvo} em Arc·dia. Use \`!admincriar\` primeiro.`);
+        await enviarMensagemTextoWhapi(chatId, `Ficha n√£o encontrada para o ID ${idAlvo} em Arc√°dia. Use \`!admincriar\` primeiro.`);
         return;
     }
     
@@ -599,7 +599,7 @@ async function handleAdminComandoFichaArcadia(chatId, args, tipoComando, callbac
 
 function modificarXPArcadia(ficha, argsValor) {
     const valorXP = parseInt(argsValor[0]);
-    if (isNaN(valorXP)) { return "ERRO: Valor de XP inv·lido.";  }
+    if (isNaN(valorXP)) { return "ERRO: Valor de XP inv√°lido.";  }
     ficha.xpAtual = (ficha.xpAtual || 0) + valorXP;
     let mensagensLevelUp = []; 
     let subiuDeNivelAdmin = false;
@@ -620,7 +620,7 @@ function modificarXPArcadia(ficha, argsValor) {
         ficha.pvAtual = ficha.pvMax; 
         ficha.pmAtual = ficha.pmMax;
 
-        mensagensLevelUp.push(`?? [Admin] ${ficha.nomePersonagem || '[NOME_PERSONAGEM_ALVO]'} alcanÁou o NÌvel ${ficha.nivel}!`);
+        mensagensLevelUp.push(`üéâ [Admin] ${ficha.nomePersonagem || '[NOME_PERSONAGEM_ALVO]'} alcan√ßou o N√≠vel ${ficha.nivel}!`);
         ficha.xpProximoNivel = calcularXpProximoNivel(ficha.nivel);
     }
     let msgRetorno = `XP de [NOME_PERSONAGEM_ALVO] atualizado para ${ficha.xpAtual}/${ficha.xpProximoNivel}.`;
@@ -632,7 +632,7 @@ function modificarXPArcadia(ficha, argsValor) {
 
 function modificarNivelArcadia(ficha, argsValor) {
     const novoNivel = parseInt(argsValor[0]);
-    if (isNaN(novoNivel) || novoNivel < 1) return "ERRO: NÌvel inv·lido.";
+    if (isNaN(novoNivel) || novoNivel < 1) return "ERRO: N√≠vel inv√°lido.";
     const nivelAntigo = ficha.nivel || 1; 
     ficha.nivel = novoNivel;
     ficha.xpAtual = 0;
@@ -643,12 +643,12 @@ function modificarNivelArcadia(ficha, argsValor) {
     if (diffNivel > 0) { 
         ficha.atributos.pontosParaDistribuir = (ficha.atributos.pontosParaDistribuir || 0) + (diffNivel * 2);
     }
-    return `NÌvel de [NOME_PERSONAGEM_ALVO] definido para ${ficha.nivel}.\nXP zerado. PrÛximo nÌvel: ${ficha.xpProximoNivel} XP. Pontos p/ distribuir: ${ficha.atributos.pontosParaDistribuir || 0}.`;
+    return `N√≠vel de [NOME_PERSONAGEM_ALVO] definido para ${ficha.nivel}.\nXP zerado. Pr√≥ximo n√≠vel: ${ficha.xpProximoNivel} XP. Pontos p/ distribuir: ${ficha.atributos.pontosParaDistribuir || 0}.`;
 }
 
 function modificarFlorins(ficha, argsValor) { 
     const valorFlorins = parseInt(argsValor[0]);
-    if (isNaN(valorFlorins)) return "ERRO: Valor de Florins inv·lido.";
+    if (isNaN(valorFlorins)) return "ERRO: Valor de Florins inv√°lido.";
     ficha.florinsDeOuro = (ficha.florinsDeOuro || 0) + valorFlorins;
     if (ficha.florinsDeOuro < 0) ficha.florinsDeOuro = 0;
     return `Florins de Ouro de [NOME_PERSONAGEM_ALVO] atualizados para ${ficha.florinsDeOuro} FO.`;
@@ -656,56 +656,56 @@ function modificarFlorins(ficha, argsValor) {
 
 function modificarEssencia(ficha, argsValor) {
     const valorEssencia = parseInt(argsValor[0]);
-    if (isNaN(valorEssencia)) return "ERRO: Valor de EssÍncia inv·lido.";
+    if (isNaN(valorEssencia)) return "ERRO: Valor de Ess√™ncia inv√°lido.";
     ficha.essenciaDeArcadia = (ficha.essenciaDeArcadia || 0) + valorEssencia;
     if (ficha.essenciaDeArcadia < 0) ficha.essenciaDeArcadia = 0;
-    return `EssÍncia de Arc·dia de [NOME_PERSONAGEM_ALVO] atualizada para ${ficha.essenciaDeArcadia} EA.`;
+    return `Ess√™ncia de Arc√°dia de [NOME_PERSONAGEM_ALVO] atualizada para ${ficha.essenciaDeArcadia} EA.`;
 }
 
 function modificarAddItemArcadia(ficha, argsItem) {
     const inputCompleto = argsItem.join(" "); 
     const partesItem = inputCompleto.split(';').map(p => p.trim());
-    if (partesItem.length === 0 || !partesItem[0]) return "ERRO: Nome do item obrigatÛrio.";
+    if (partesItem.length === 0 || !partesItem[0]) return "ERRO: Nome do item obrigat√≥rio.";
     const nomeItem = partesItem[0];
     const quantidade = partesItem[1] ? parseInt(partesItem[1]) : 1;
-    const tipoItem = partesItem[2] || "Item GenÈrico"; 
+    const tipoItem = partesItem[2] || "Item Gen√©rico"; 
     const descricaoItem = partesItem[3] || "";
-    if (isNaN(quantidade) || quantidade < 1) return "ERRO: Quantidade inv·lida.";
+    if (isNaN(quantidade) || quantidade < 1) return "ERRO: Quantidade inv√°lida.";
     if (!ficha.inventario) ficha.inventario = [];
     const itemExistenteIndex = ficha.inventario.findIndex(i => i.itemNome.toLowerCase() === nomeItem.toLowerCase());
     if (itemExistenteIndex > -1) {
         ficha.inventario[itemExistenteIndex].quantidade = (ficha.inventario[itemExistenteIndex].quantidade || 0) + quantidade;
         if (descricaoItem) ficha.inventario[itemExistenteIndex].descricao = descricaoItem;
-        if (tipoItem !== "Item GenÈrico") ficha.inventario[itemExistenteIndex].tipo = tipoItem;
+        if (tipoItem !== "Item Gen√©rico") ficha.inventario[itemExistenteIndex].tipo = tipoItem;
         return `Quantidade de "${nomeItem}" aumentada para ${ficha.inventario[itemExistenteIndex].quantidade} para [NOME_PERSONAGEM_ALVO].`;
     } else {
         ficha.inventario.push({ itemNome: nomeItem, quantidade: quantidade, tipo: tipoItem, descricao: descricaoItem });
-        return `"${nomeItem}" (x${quantidade}) adicionado ao invent·rio de [NOME_PERSONAGEM_ALVO].`;
+        return `"${nomeItem}" (x${quantidade}) adicionado ao invent√°rio de [NOME_PERSONAGEM_ALVO].`;
     }
 }
 
 function modificarDelItemArcadia(ficha, argsItem) {
     const inputCompleto = argsItem.join(" ");
     const partesItem = inputCompleto.split(';').map(p => p.trim());
-    if (partesItem.length === 0 || !partesItem[0]) return "ERRO: Nome do item obrigatÛrio.";
+    if (partesItem.length === 0 || !partesItem[0]) return "ERRO: Nome do item obrigat√≥rio.";
     const nomeItem = partesItem[0]; 
     const quantidadeRemover = partesItem[1] ? parseInt(partesItem[1]) : 1;
-    if (isNaN(quantidadeRemover) || quantidadeRemover < 1) return "ERRO: Quantidade a remover inv·lida.";
+    if (isNaN(quantidadeRemover) || quantidadeRemover < 1) return "ERRO: Quantidade a remover inv√°lida.";
     if (!ficha.inventario) ficha.inventario = [];
     const itemExistenteIndex = ficha.inventario.findIndex(i => i.itemNome.toLowerCase() === nomeItem.toLowerCase());
-    if (itemExistenteIndex === -1) return `ERRO: Item "${nomeItem}" n„o encontrado no invent·rio de [NOME_PERSONAGEM_ALVO].`;
+    if (itemExistenteIndex === -1) return `ERRO: Item "${nomeItem}" n√£o encontrado no invent√°rio de [NOME_PERSONAGEM_ALVO].`;
     const nomeItemOriginal = ficha.inventario[itemExistenteIndex].itemNome;
     ficha.inventario[itemExistenteIndex].quantidade -= quantidadeRemover;
 
     if (ficha.inventario[itemExistenteIndex].quantidade <= 0) {
         ficha.inventario.splice(itemExistenteIndex, 1);
-        return `"${nomeItemOriginal}" removido completamente do invent·rio de [NOME_PERSONAGEM_ALVO].`;
+        return `"${nomeItemOriginal}" removido completamente do invent√°rio de [NOME_PERSONAGEM_ALVO].`;
     } else {
-        return `${quantidadeRemover} unidade(s) de "${nomeItemOriginal}" removida(s) do invent·rio de [NOME_PERSONAGEM_ALVO]. Restam ${ficha.inventario[itemExistenteIndex].quantidade}.`;
+        return `${quantidadeRemover} unidade(s) de "${nomeItemOriginal}" removida(s) do invent√°rio de [NOME_PERSONAGEM_ALVO]. Restam ${ficha.inventario[itemExistenteIndex].quantidade}.`;
     }
 }
 
-// --- FUN«√O handleAdminSetAtributoArcadia CORRIGIDA ---
+// --- FUN√á√ÉO handleAdminSetAtributoArcadia CORRIGIDA ---
 async function handleAdminSetAtributoArcadia(chatId, args) {
     if (args.length < 3) { 
         await enviarMensagemTextoWhapi(chatId, "Uso: `!adminsetattr <ID_ALVO> <atributo> <valor>`\nAtributos: forca, agilidade, vitalidade, manaBase, intelecto, carisma.");
@@ -716,36 +716,36 @@ async function handleAdminSetAtributoArcadia(chatId, args) {
     const valor = parseInt(args[2]);
 
     if (!/^\d+$/.test(idAlvo)) {
-        await enviarMensagemTextoWhapi(chatId, `ID do Jogador Alvo (${idAlvo}) inv·lido.`);
+        await enviarMensagemTextoWhapi(chatId, `ID do Jogador Alvo (${idAlvo}) inv√°lido.`);
         return;
     }
 
     const atributosValidos = ["forca", "agilidade", "vitalidade", "manaBase", "intelecto", "carisma"];
-    // Alterado: Encontra o nome canÙnico do atributo
+    // Alterado: Encontra o nome can√¥nico do atributo
     const atributoCanonical = atributosValidos.find(valido => valido.toLowerCase() === atributoNomeInput.toLowerCase());
 
-    if (!atributoCanonical) { // Alterado: Usa o nome canÙnico para validaÁ„o
-        await enviarMensagemTextoWhapi(chatId, `Atributo "${atributoNomeInput}" inv·lido. V·lidos: ${atributosValidos.join(", ")}.`);
+    if (!atributoCanonical) { // Alterado: Usa o nome can√¥nico para valida√ß√£o
+        await enviarMensagemTextoWhapi(chatId, `Atributo "${atributoNomeInput}" inv√°lido. V√°lidos: ${atributosValidos.join(", ")}.`);
         return;
     }
 
     if (isNaN(valor) || valor < 0) { 
-        await enviarMensagemTextoWhapi(chatId, `Valor para ${atributoCanonical} deve ser um n˙mero positivo ou zero.`); // Usa atributoCanonical na msg
+        await enviarMensagemTextoWhapi(chatId, `Valor para ${atributoCanonical} deve ser um n√∫mero positivo ou zero.`); // Usa atributoCanonical na msg
         return;
     }
 
     const fichaAlvo = await getFichaOuCarregar(idAlvo);
     if (!fichaAlvo) {
-        await enviarMensagemTextoWhapi(chatId, `Ficha n„o encontrada para o ID ${idAlvo} em Arc·dia.`);
+        await enviarMensagemTextoWhapi(chatId, `Ficha n√£o encontrada para o ID ${idAlvo} em Arc√°dia.`);
         return;
     }
     if (!fichaAlvo.atributos) fichaAlvo.atributos = JSON.parse(JSON.stringify(fichaModeloArcadia.atributos)); 
     
-    fichaAlvo.atributos[atributoCanonical] = valor; // Alterado: Usa o nome canÙnico para definir o valor
+    fichaAlvo.atributos[atributoCanonical] = valor; // Alterado: Usa o nome can√¥nico para definir o valor
     
     await atualizarFichaETransmitir(chatId, idAlvo, fichaAlvo, `[Admin] Atributo ${atributoCanonical} de [NOME_PERSONAGEM_ALVO] definido para ${valor}. PV/PM recalculados.`, fichaAlvo.nomePersonagem || idAlvo);
 }
-// --- FIM DA CORRE«√O handleAdminSetAtributoArcadia ---
+// --- FIM DA CORRE√á√ÉO handleAdminSetAtributoArcadia ---
 
 
 async function handleAdminAddPontosAtributoArcadia(chatId, args) {
@@ -756,17 +756,17 @@ async function handleAdminAddPontosAtributoArcadia(chatId, args) {
     const idAlvo = args[0].trim(); 
     const quantidade = parseInt(args[1]);
     if (!/^\d+$/.test(idAlvo)) {
-        await enviarMensagemTextoWhapi(chatId, `ID do Jogador Alvo (${idAlvo}) inv·lido.`);
+        await enviarMensagemTextoWhapi(chatId, `ID do Jogador Alvo (${idAlvo}) inv√°lido.`);
         return;
     }
     if (isNaN(quantidade)) {
-        await enviarMensagemTextoWhapi(chatId, "Quantidade de pontos deve ser um n˙mero.");
+        await enviarMensagemTextoWhapi(chatId, "Quantidade de pontos deve ser um n√∫mero.");
         return;
     }
 
     const fichaAlvo = await getFichaOuCarregar(idAlvo);
     if (!fichaAlvo) {
-        await enviarMensagemTextoWhapi(chatId, `Ficha n„o encontrada para o ID ${idAlvo} em Arc·dia.`);
+        await enviarMensagemTextoWhapi(chatId, `Ficha n√£o encontrada para o ID ${idAlvo} em Arc√°dia.`);
         return;
     }
     if (!fichaAlvo.atributos) fichaAlvo.atributos = JSON.parse(JSON.stringify(fichaModeloArcadia.atributos)); 
@@ -777,25 +777,25 @@ async function handleAdminAddPontosAtributoArcadia(chatId, args) {
 }
 
 async function handleBoasVindasArcadia(chatId, senderName) {
-    let mensagem = `?? SaudaÁıes, ${senderName}!\nBem-vindo(a) a Arc·dia! ??\n\n`;
-    mensagem += "Um mundo medieval vibrante com magia, mas tambÈm repleto de perigos. Criaturas ancestrais despertam, impuros espreitam nas sombras e antigos conflitos ameaÁam reacender as chamas da guerra entre os reinos.\n\n";
-    mensagem += "Dos nobres Eldari nas florestas encantadas de Elarion, passando pelos mestres forjadores Valtherans em Durnholde, atÈ os vers·teis Humanos de Valdoria e os enigm·ticos Seraphim na cidade flutuante de Caelum - cada raÁa e reino possui sua histÛria e seus desafios.\n\n";
-    mensagem += "Prepare-se para explorar terras vastas, desde os campos fÈrteis de Valdoria atÈ as sombrias Ravengard e a misteriosa Ilha de Morwyn. Escolha sua classe, aprimore seus atributos e habilidades, e forje seu destino neste mundo inst·vel.\n\n";
-    mensagem += "Que suas aventuras sejam Èpicas!\n\n";
-    mensagem += "Use `!comandos` para ver a lista de aÁıes disponÌveis.\n";
-    mensagem += "Use `!criar <Nome>;<RaÁa>;<Classe>;<ReinoOrigem>` para iniciar sua jornada!";
+    let mensagem = `üåü Sauda√ß√µes, ${senderName}!\nBem-vindo(a) a Arc√°dia! üåü\n\n`;
+    mensagem += "Um mundo medieval vibrante com magia, mas tamb√©m repleto de perigos. Criaturas ancestrais despertam, impuros espreitam nas sombras e antigos conflitos amea√ßam reacender as chamas da guerra entre os reinos.\n\n";
+    mensagem += "Dos nobres Eldari nas florestas encantadas de Elarion, passando pelos mestres forjadores Valtherans em Durnholde, at√© os vers√°teis Humanos de Valdoria e os enigm√°ticos Seraphim na cidade flutuante de Caelum ‚Äì cada ra√ßa e reino possui sua hist√≥ria e seus desafios.\n\n";
+    mensagem += "Prepare-se para explorar terras vastas, desde os campos f√©rteis de Valdoria at√© as sombrias Ravengard e a misteriosa Ilha de Morwyn. Escolha sua classe, aprimore seus atributos e habilidades, e forje seu destino neste mundo inst√°vel.\n\n";
+    mensagem += "Que suas aventuras sejam √©picas!\n\n";
+    mensagem += "Use `!comandos` para ver a lista de a√ß√µes dispon√≠veis.\n";
+    mensagem += "Use `!criar <Nome>;<Ra√ßa>;<Classe>;<ReinoOrigem>` para iniciar sua jornada!";
     await enviarMensagemTextoWhapi(chatId, mensagem);
 }
 
-// --- FUN«√O handleDistribuirPontos CORRIGIDA ---
+// --- FUN√á√ÉO handleDistribuirPontos CORRIGIDA ---
 async function handleDistribuirPontos(chatId, sender, args) {
     const ficha = await getFichaOuCarregar(sender);
     if (!ficha) {
-        await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arc·dia n„o foi encontrada. Crie uma com `!criar`.");
+        await enviarMensagemTextoWhapi(chatId, "Sua ficha de Arc√°dia n√£o foi encontrada. Crie uma com `!criar`.");
         return;
     }
     if (!ficha.atributos || ficha.atributos.pontosParaDistribuir === undefined || ficha.atributos.pontosParaDistribuir <= 0) {
-        await enviarMensagemTextoWhapi(chatId, "VocÍ n„o tem pontos de atributo para distribuir no momento.");
+        await enviarMensagemTextoWhapi(chatId, "Voc√™ n√£o tem pontos de atributo para distribuir no momento.");
         return;
     }
     if (args.length < 2) { // atributo, quantidade
@@ -807,41 +807,41 @@ async function handleDistribuirPontos(chatId, sender, args) {
     const pontosADistribuir = parseInt(args[1]);
     
     const atributosValidos = ["forca", "agilidade", "vitalidade", "manaBase", "intelecto", "carisma"];
-    // Alterado: Encontra o nome canÙnico do atributo
+    // Alterado: Encontra o nome can√¥nico do atributo
     const atributoCanonical = atributosValidos.find(valido => valido.toLowerCase() === atributoNomeInput.toLowerCase());
 
-    if (!atributoCanonical) { // Alterado: Usa o nome canÙnico para validaÁ„o
-        await enviarMensagemTextoWhapi(chatId, `Atributo "${atributoNomeInput}" inv·lido. V·lidos: ${atributosValidos.join(", ")}.`);
+    if (!atributoCanonical) { // Alterado: Usa o nome can√¥nico para valida√ß√£o
+        await enviarMensagemTextoWhapi(chatId, `Atributo "${atributoNomeInput}" inv√°lido. V√°lidos: ${atributosValidos.join(", ")}.`);
         return; 
     }
     
     if (isNaN(pontosADistribuir) || pontosADistribuir <= 0) { 
-        await enviarMensagemTextoWhapi(chatId, "A quantidade de pontos a distribuir deve ser um n˙mero maior que zero.");
+        await enviarMensagemTextoWhapi(chatId, "A quantidade de pontos a distribuir deve ser um n√∫mero maior que zero.");
         return; 
     }
     if (pontosADistribuir > ficha.atributos.pontosParaDistribuir) { 
-        await enviarMensagemTextoWhapi(chatId, `VocÍ sÛ tem ${ficha.atributos.pontosParaDistribuir} pontos para distribuir. N„o pode usar ${pontosADistribuir}.`);
+        await enviarMensagemTextoWhapi(chatId, `Voc√™ s√≥ tem ${ficha.atributos.pontosParaDistribuir} pontos para distribuir. N√£o pode usar ${pontosADistribuir}.`);
         return; 
     }
 
-    // Alterado: Usa o nome canÙnico para modificar a ficha
+    // Alterado: Usa o nome can√¥nico para modificar a ficha
     ficha.atributos[atributoCanonical] = (ficha.atributos[atributoCanonical] || 0) + pontosADistribuir;
     ficha.atributos.pontosParaDistribuir -= pontosADistribuir;
     
-    await atualizarFichaETransmitir(chatId, sender, ficha, `Atributo ${atributoCanonical} aumentado em ${pontosADistribuir}! Novo valor: ${ficha.atributos[atributoCanonical]}.\nVocÍ ainda tem ${ficha.atributos.pontosParaDistribuir} pontos para distribuir.`);
+    await atualizarFichaETransmitir(chatId, sender, ficha, `Atributo ${atributoCanonical} aumentado em ${pontosADistribuir}! Novo valor: ${ficha.atributos[atributoCanonical]}.\nVoc√™ ainda tem ${ficha.atributos.pontosParaDistribuir} pontos para distribuir.`);
 }
-// --- FIM DA CORRE«√O handleDistribuirPontos ---
+// --- FIM DA CORRE√á√ÉO handleDistribuirPontos ---
 
 async function handleJackpotArcadia(chatId, sender) {
     const ficha = await getFichaOuCarregar(sender);
     if (!ficha) {
-        await enviarMensagemTextoWhapi(chatId, "VocÍ precisa de uma ficha em Arc·dia para tentar a sorte no Jackpot!");
+        await enviarMensagemTextoWhapi(chatId, "Voc√™ precisa de uma ficha em Arc√°dia para tentar a sorte no Jackpot!");
         return;
     }
 
     const custoJackpot = 25; 
     if ((ficha.florinsDeOuro || 0) < custoJackpot) {
-        await enviarMensagemTextoWhapi(chatId, `VocÍ precisa de ${custoJackpot} Florins de Ouro para girar o Jackpot. VocÍ tem ${ficha.florinsDeOuro || 0} FO.`);
+        await enviarMensagemTextoWhapi(chatId, `Voc√™ precisa de ${custoJackpot} Florins de Ouro para girar o Jackpot. Voc√™ tem ${ficha.florinsDeOuro || 0} FO.`);
         return;
     }
 
@@ -851,34 +851,34 @@ async function handleJackpotArcadia(chatId, sender) {
     if (sorte < 0.01) { 
         const essenciaGanha = 5;
         ficha.essenciaDeArcadia = (ficha.essenciaDeArcadia || 0) + essenciaGanha;
-        premioMsg = `??? JACKPOT LEND¡RIO!!! ???\nVocÍ ganhou ${essenciaGanha} EssÍncias de Arc·dia e 100 Florins de Ouro! Que sorte incrÌvel!`;
+        premioMsg = `üåü‚ú® JACKPOT LEND√ÅRIO!!! ‚ú®üåü\nVoc√™ ganhou ${essenciaGanha} Ess√™ncias de Arc√°dia e 100 Florins de Ouro! Que sorte incr√≠vel!`;
         ficha.florinsDeOuro += 100;
     } else if (sorte < 0.10) { 
         const florinsGanhos = Math.floor(Math.random() * 100) + 50;
         ficha.florinsDeOuro += florinsGanhos;
-        premioMsg = `?? Sorte Grande! VocÍ ganhou ${florinsGanhos} Florins de Ouro!`;
+        premioMsg = `üí∞ Sorte Grande! Voc√™ ganhou ${florinsGanhos} Florins de Ouro!`;
     } else if (sorte < 0.30) { 
         const florinsGanhos = Math.floor(Math.random() * 40) + 10;
         ficha.florinsDeOuro += florinsGanhos;
-        premioMsg = `?? Um bom prÍmio! VocÍ ganhou ${florinsGanhos} Florins de Ouro!`;
+        premioMsg = `üçÄ Um bom pr√™mio! Voc√™ ganhou ${florinsGanhos} Florins de Ouro!`;
     } else if (sorte < 0.60) { 
-        premioMsg = `?? Quase! O Jackpot n„o te deu nada desta vez... apenas o vento.`;
+        premioMsg = `üí® Quase! O Jackpot n√£o te deu nada desta vez... apenas o vento.`;
     } else { 
         const pegadinhas = [
-            "VocÍ puxa a alavanca e... uma meia velha e fedorenta cai do Jackpot! Que azar!",
-            "O Jackpot solta uma fumaÁa colorida e te entrega um biscoito da sorte. Dentro dele est· escrito: 'Tente novamente'.",
-            "VocÍ ganhou... um abraÁo imagin·rio do Mestre do Jackpot! ??",
-            "Uma pequena quantia de 5 Florins de Ouro È sua! Melhor que nada, certo?"
+            "Voc√™ puxa a alavanca e... uma meia velha e fedorenta cai do Jackpot! Que azar!",
+            "O Jackpot solta uma fuma√ßa colorida e te entrega um biscoito da sorte. Dentro dele est√° escrito: 'Tente novamente'.",
+            "Voc√™ ganhou... um abra√ßo imagin√°rio do Mestre do Jackpot! ü§ó",
+            "Uma pequena quantia de 5 Florins de Ouro √© sua! Melhor que nada, certo?"
         ];
         premioMsg = pegadinhas[Math.floor(Math.random() * pegadinhas.length)];
         if (premioMsg.includes("5 Florins")) ficha.florinsDeOuro += 5;
     }
 
-    await atualizarFichaETransmitir(chatId, sender, ficha, `VocÍ gastou ${custoJackpot} FO no Jackpot...\n${premioMsg}\nSeu saldo: ${ficha.florinsDeOuro} FO, ${ficha.essenciaDeArcadia || 0} EA.`);
+    await atualizarFichaETransmitir(chatId, sender, ficha, `Voc√™ gastou ${custoJackpot} FO no Jackpot...\n${premioMsg}\nSeu saldo: ${ficha.florinsDeOuro} FO, ${ficha.essenciaDeArcadia || 0} EA.`);
 }
 
 async function handleListarRacas(chatId) {
-    let mensagem = "--- ?? RaÁas Jog·veis de Arc·dia ?? ---\n\n";
+    let mensagem = "--- üìú Ra√ßas Jog√°veis de Arc√°dia üìú ---\n\n";
     RACAS_ARCADIA.forEach(raca => {
         mensagem += `*${raca.nome}* (${raca.grupo})\n_${raca.desc}_\n\n`;
     });
@@ -887,7 +887,7 @@ async function handleListarRacas(chatId) {
 }
 
 async function handleListarClasses(chatId) {
-    let mensagem = "--- ?? Classes Jog·veis de Arc·dia ?? ---\n\n";
+    let mensagem = "--- ‚öîÔ∏è Classes Jog√°veis de Arc√°dia ‚öîÔ∏è ---\n\n";
     CLASSES_ARCADIA.forEach(classe => {
         mensagem += `*${classe.nome}* - ${classe.desc}\n`;
     });
@@ -896,7 +896,7 @@ async function handleListarClasses(chatId) {
 }
 
 async function handleListarReinos(chatId) {
-    let mensagem = "--- ?? Reinos Principais de Arc·dia ?? ---\n\n";
+    let mensagem = "--- üè∞ Reinos Principais de Arc√°dia üè∞ ---\n\n";
     REINOS_ARCADIA.forEach(reino => {
         mensagem += `*${reino.nome}* - ${reino.desc}\n\n`;
     });
@@ -905,26 +905,26 @@ async function handleListarReinos(chatId) {
 }
 
 async function handleComandosArcadia(chatId, senderIsOwner) {
-    let resposta = "?? --- Comandos de Arc·dia --- ??\n\n";
+    let resposta = "üìú --- Comandos de Arc√°dia --- üìú\n\n";
     resposta += "`!arcadia` ou `!bemvindo` - Mensagem de boas-vindas.\n";
-    resposta += "`!ping` - Testa a conex„o.\n";
-    resposta += "`!criar <nome>;<raÁa>;<classe>;<reino>` - Cria sua ficha.\n   (Use `!listaracas`, `!listaclasses`, `!listareinos` para ajuda)\n";
+    resposta += "`!ping` - Testa a conex√£o.\n";
+    resposta += "`!criar <nome>;<ra√ßa>;<classe>;<reino>` - Cria sua ficha.\n   (Use `!listaracas`, `!listaclasses`, `!listareinos` para ajuda)\n";
     resposta += "`!ficha` - Mostra sua ficha atual.\n";
     resposta += "`!distribuirpontos <atr> <qtd>` - Distribui seus pontos de atributo.\n   (Atributos: forca, agilidade, vitalidade, manaBase, intelecto, carisma)\n";
     resposta += "`!jackpot` - Tente sua sorte! (Custa 25 Florins)\n";
     resposta += "\n--- Comandos Informativos ---\n";
     resposta += "`!listaracas`\n`!listaclasses`\n`!listareinos`\n";
     if (senderIsOwner) {
-        resposta += "\n--- Comandos de Admin (Propriet·rio) ---\n";
-        resposta += "`!ficha <ID_ALVO>` - Mostra a ficha do ID_ALVO (sÛ n˙meros).\n";
-        resposta += "`!admincriar <ID_ALVO>;<nome>;<raÁa>;<classe>;<reino>`\n   Cria/sobrescreve ficha para ID_ALVO.\n";
+        resposta += "\n--- Comandos de Admin (Propriet√°rio) ---\n";
+        resposta += "`!ficha <ID_ALVO>` - Mostra a ficha do ID_ALVO (s√≥ n√∫meros).\n";
+        resposta += "`!admincriar <ID_ALVO>;<nome>;<ra√ßa>;<classe>;<reino>`\n   Cria/sobrescreve ficha para ID_ALVO.\n";
         resposta += "`!adminaddxp <ID_ALVO> <valor>` - Adiciona XP e calcula level up.\n";
-        resposta += "`!adminsetnivel <ID_ALVO> <nÌvel>` - Define nÌvel e XP.\n";
+        resposta += "`!adminsetnivel <ID_ALVO> <n√≠vel>` - Define n√≠vel e XP.\n";
         resposta += "`!adminaddflorins <ID_ALVO> <valor>`\n";
         resposta += "`!adminaddessencia <ID_ALVO> <valor>`\n";
         resposta += "`!adminadditem <ID_ALVO> <item>[;qtd;tipo;desc]`\n";
         resposta += "`!admindelitem <ID_ALVO> <item>[;qtd]`\n";
-        resposta += "`!adminsetattr <ID_ALVO> <atributo> <valor>`\n"; // Corrigido aqui tambÈm
+        resposta += "`!adminsetattr <ID_ALVO> <atributo> <valor>`\n"; // Corrigido aqui tamb√©m
         resposta += "`!adminaddpontosattr <ID_ALVO> <quantidade>`\n";
     }
     
@@ -934,7 +934,7 @@ async function handleComandosArcadia(chatId, senderIsOwner) {
 
 async function enviarMensagemTextoWhapi(para, mensagem) {
     if (!WHAPI_API_TOKEN) {
-        console.error("Token do Whapi n„o configurado para envio.");
+        console.error("Token do Whapi n√£o configurado para envio.");
         return;
     }
     const endpoint = "/messages/text";
@@ -979,11 +979,11 @@ app.post('/webhook/whatsapp', async (req, res) => {
                 }
 
                 if (fromMe === true) {
-                    console.log(`[Webhook] Mensagem prÛpria ignorada do chat ${chatId}.`);
+                    console.log(`[Webhook] Mensagem pr√≥pria ignorada do chat ${chatId}.`);
                     continue;
                 }
                 if (!chatId || !senderRaw) {
-                    console.warn("[Webhook] Mensagem sem 'chat_id' ou 'sender' v·lido:", messageData);
+                    console.warn("[Webhook] Mensagem sem 'chat_id' ou 'sender' v√°lido:", messageData);
                     continue;
                 }
 
@@ -992,8 +992,8 @@ app.post('/webhook/whatsapp', async (req, res) => {
                 let isOwner = (ownerIdVerificado && sender === ownerIdVerificado);
                 let isJogadorPermitido = listaJogadoresPermitidos.has(sender);
 
-                if (!isOwner && !isJogadorPermitido && JOGADORES_PERMITIDOS_IDS_STRING !== "") { // Adicionada verificaÁ„o para permitir todos se JOGADORES_PERMITIDOS_IDS_STRING for vazio
-                    console.log(`[Webhook] Usu·rio ${senderName} (${sender}) n„o È propriet·rio nem jogador permitido. Comando ignorado.`);
+                if (!isOwner && !isJogadorPermitido && JOGADORES_PERMITIDOS_IDS_STRING !== "") { // Adicionada verifica√ß√£o para permitir todos se JOGADORES_PERMITIDOS_IDS_STRING for vazio
+                    console.log(`[Webhook] Usu√°rio ${senderName} (${sender}) n√£o √© propriet√°rio nem jogador permitido. Comando ignorado.`);
                     continue; 
                 }
 
@@ -1002,11 +1002,11 @@ app.post('/webhook/whatsapp', async (req, res) => {
                     const args = textContent.slice(1).trim().split(/ +/g);
                     const comando = args.shift().toLowerCase();
                     
-                    let preLog = isOwner ? "[Propriet·rio]" : (isJogadorPermitido ? "[Jogador Permitido]" : (JOGADORES_PERMITIDOS_IDS_STRING === "" ? "[Qualquer Jogador]" : "[N√O AUTORIZADO]"));
+                    let preLog = isOwner ? "[Propriet√°rio]" : (isJogadorPermitido ? "[Jogador Permitido]" : (JOGADORES_PERMITIDOS_IDS_STRING === "" ? "[Qualquer Jogador]" : "[N√ÉO AUTORIZADO]"));
                     console.log(`[Webhook] ${preLog} COMANDO: '!${comando}' | Args: [${args.join(', ')}] | De: ${senderName} (${sender}) | Chat: ${chatId}`);
                     
                     if (comando === 'ping') {
-                        await enviarMensagemTextoWhapi(chatId, `Pong de Arc·dia! Ol·, ${senderName}! Estou pronto para a aventura! ??`);
+                        await enviarMensagemTextoWhapi(chatId, `Pong de Arc√°dia! Ol√°, ${senderName}! Estou pronto para a aventura! ‚öîÔ∏è`);
                     } else if (comando === 'arcadia' || comando === 'bemvindo') {
                         await handleBoasVindasArcadia(chatId, senderName);
                     } else if (comando === 'listaracas') {
@@ -1042,8 +1042,8 @@ app.post('/webhook/whatsapp', async (req, res) => {
                                 break;
                             case 'adminsetnivel':
                                 await handleAdminComandoFichaArcadia(chatId, args, 'setnivel', modificarNivelArcadia,
-                                    `NÌvel de [NOME_PERSONAGEM_ALVO] atualizado.`,
-                                    "Uso: `!adminsetnivel <ID_ALVO> <nÌvel>`");
+                                    `N√≠vel de [NOME_PERSONAGEM_ALVO] atualizado.`,
+                                    "Uso: `!adminsetnivel <ID_ALVO> <n√≠vel>`");
                                 break;
                             case 'adminaddflorins':
                                 await handleAdminComandoFichaArcadia(chatId, args, 'addflorins', modificarFlorins,
@@ -1052,17 +1052,17 @@ app.post('/webhook/whatsapp', async (req, res) => {
                                 break;
                             case 'adminaddessencia':
                                 await handleAdminComandoFichaArcadia(chatId, args, 'addessencia', modificarEssencia,
-                                    `EssÍncia de Arc·dia de [NOME_PERSONAGEM_ALVO] atualizada.`,
+                                    `Ess√™ncia de Arc√°dia de [NOME_PERSONAGEM_ALVO] atualizada.`,
                                     "Uso: `!adminaddessencia <ID_ALVO> <valor>`");
                                 break;
                             case 'adminadditem':
                                 await handleAdminComandoFichaArcadia(chatId, args, 'additem', modificarAddItemArcadia,
-                                    `Invent·rio de [NOME_PERSONAGEM_ALVO] atualizado.`, 
+                                    `Invent√°rio de [NOME_PERSONAGEM_ALVO] atualizado.`, 
                                     "Uso: `!adminadditem <ID_ALVO> <nome>[;qtd;tipo;desc]`");
                                 break;
                             case 'admindelitem':
                                 await handleAdminComandoFichaArcadia(chatId, args, 'delitem', modificarDelItemArcadia,
-                                    `Invent·rio de [NOME_PERSONAGEM_ALVO] atualizado.`, 
+                                    `Invent√°rio de [NOME_PERSONAGEM_ALVO] atualizado.`, 
                                     "Uso: `!admindelitem <ID_ALVO> <nome>[;qtd]`");
                                 break;
                             case 'adminsetattr': // Corrigido
@@ -1090,7 +1090,7 @@ app.post('/webhook/whatsapp', async (req, res) => {
                                 await handleDelItemArcadia(chatId, sender, args);
                                 break;
                             default:
-                                await enviarMensagemTextoWhapi(chatId, `Comando "!${comando}" (possivelmente de Admin) n„o reconhecido.`);
+                                await enviarMensagemTextoWhapi(chatId, `Comando "!${comando}" (possivelmente de Admin) n√£o reconhecido.`);
                                 break;
                         }
                     } else {
@@ -1100,12 +1100,12 @@ app.post('/webhook/whatsapp', async (req, res) => {
                             comando !== 'listaracas' && comando !== 'listaclasses' && comando !== 'listareinos' &&
                             comando !== 'criar' && comando !== 'ficha' && comando !== 'minhaficha' && comando !== 'verficha' &&
                             comando !== 'distribuirpontos' && comando !== 'jackpot' && comando !== 'comandos' && comando !== 'help')) {
-                            await enviarMensagemTextoWhapi(chatId, `Comando "!${comando}" n„o reconhecido ou vocÍ n„o tem permiss„o para us·-lo, ${senderName}.`);
+                            await enviarMensagemTextoWhapi(chatId, `Comando "!${comando}" n√£o reconhecido ou voc√™ n√£o tem permiss√£o para us√°-lo, ${senderName}.`);
                         }
                     }
                 } else if (textContent) {
                     if (isOwner) {
-                         console.log(`[Webhook] Texto normal recebido do Propriet·rio ${senderName}: "${textContent}"`);
+                         console.log(`[Webhook] Texto normal recebido do Propriet√°rio ${senderName}: "${textContent}"`);
                     } else if (isJogadorPermitido || JOGADORES_PERMITIDOS_IDS_STRING === "") {
                          console.log(`[Webhook] Texto normal recebido do Jogador ${senderName}: "${textContent}"`);
                     }
@@ -1115,13 +1115,13 @@ app.post('/webhook/whatsapp', async (req, res) => {
             console.log("[Webhook] Estrutura inesperada ou sem mensagens:", req.body);
         }
     } catch (error) {
-        console.error("Erro CRÕTICO ao processar webhook do Whapi:", error.message, error.stack);
+        console.error("Erro CR√çTICO ao processar webhook do Whapi:", error.message, error.stack);
     }
     res.status(200).send('OK');
 });
 
 app.get('/', (req, res) => {
-    res.send('Servidor do Bot de RPG Arc·dia (Whapi no Render com MongoDB) est· operacional!');
+    res.send('Servidor do Bot de RPG Arc√°dia (Whapi no Render com MongoDB) est√° operacional!');
 });
 
 async function iniciarServidor() {
@@ -1129,8 +1129,8 @@ async function iniciarServidor() {
     await carregarFichasDoDB();
     app.listen(PORT, () => {
         console.log("****************************************************");
-        console.log("*** INICIANDO SERVIDOR DO BOT DE RPG ARC¡DIA - WHAPI ***");
-        console.log(`*** Data/Hora InÌcio: ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} ***`);
+        console.log("*** INICIANDO SERVIDOR DO BOT DE RPG ARC√ÅDIA - WHAPI ***");
+        console.log(`*** Data/Hora In√≠cio: ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} ***`);
         console.log("****************************************************");
         const publicUrl = process.env.RENDER_EXTERNAL_URL;
         console.log(`Servidor do bot de RPG escutando na porta ${PORT}`);
@@ -1139,19 +1139,19 @@ async function iniciarServidor() {
         } else {
             console.log(`Webhook local (para testes): http://localhost:${PORT}/webhook/whatsapp`);
         }
-        console.log(`Conectado ao DB: ${MONGODB_DB_NAME}, ColeÁ„o: ${MONGODB_FICHAS_COLLECTION}`);
+        console.log(`Conectado ao DB: ${MONGODB_DB_NAME}, Cole√ß√£o: ${MONGODB_FICHAS_COLLECTION}`);
         if (OWNER_ID) {
-            console.log(`>>> ATEN«√O: Bot configurado para aceitar comandos apenas do propriet·rio: ${OWNER_ID} <<<`);
+            console.log(`>>> ATEN√á√ÉO: Bot configurado para aceitar comandos apenas do propriet√°rio: ${OWNER_ID} <<<`);
         } else {
-            console.warn(">>> ALERTA: OWNER_ID n„o definido. O bot pode estar aberto a todos os comandos (verifique a lÛgica de seguranÁa)! <<<");
+            console.warn(">>> ALERTA: OWNER_ID n√£o definido. O bot pode estar aberto a todos os comandos (verifique a l√≥gica de seguran√ßa)! <<<");
         }
-        if (JOGADORES_PERMITIDOS_IDS_STRING && listaJogadoresPermitidos.size > 0) { // Modificado para verificar JOGADORES_PERMITIDOS_IDS_STRING tambÈm
+        if (JOGADORES_PERMITIDOS_IDS_STRING && listaJogadoresPermitidos.size > 0) { // Modificado para verificar JOGADORES_PERMITIDOS_IDS_STRING tamb√©m
             console.log(`>>> Jogadores Permitidos Adicionais: ${Array.from(listaJogadoresPermitidos).join(', ')} <<<`);
-        } else if (JOGADORES_PERMITIDOS_IDS_STRING) { // Se a string existe mas est· vazia e resultou em size 0
-             console.log(">>> Lista de IDs de jogadores permitidos est· configurada mas vazia. Apenas o propriet·rio pode usar comandos restritos.");
+        } else if (JOGADORES_PERMITIDOS_IDS_STRING) { // Se a string existe mas est√° vazia e resultou em size 0
+             console.log(">>> Lista de IDs de jogadores permitidos est√° configurada mas vazia. Apenas o propriet√°rio pode usar comandos restritos.");
         }
-         else { // Se JOGADORES_PERMITIDOS_IDS_STRING n„o est· definida/vazia, e OWNER_ID tambÈm n„o est·, todos podem usar
-            console.log(">>> JOGADORES_PERMITIDOS_IDS n„o definido. Se OWNER_ID tambÈm n„o estiver, o bot pode estar aberto. Verifique a lÛgica de seguranÁa. <<<")
+         else { // Se JOGADORES_PERMITIDOS_IDS_STRING n√£o est√° definida/vazia, e OWNER_ID tamb√©m n√£o est√°, todos podem usar
+            console.log(">>> JOGADORES_PERMITIDOS_IDS n√£o definido. Se OWNER_ID tamb√©m n√£o estiver, o bot pode estar aberto. Verifique a l√≥gica de seguran√ßa. <<<")
         }
         console.log("****************************************************");
         console.log("*** SERVIDOR PRONTO E RODANDO           ***");
@@ -1160,7 +1160,7 @@ async function iniciarServidor() {
 }
 
 iniciarServidor().catch(err => {
-    console.error("Falha crÌtica ao iniciar o servidor:", err);
+    console.error("Falha cr√≠tica ao iniciar o servidor:", err);
     process.exit(1);
 });
 
@@ -1169,13 +1169,14 @@ async function desligamentoGracioso(signal) {
     if (dbClient) {
         try {
             await dbClient.close();
-            console.log("Conex„o com MongoDB fechada.");
+            console.log("Conex√£o com MongoDB fechada.");
         } catch (err) {
-            console.error("Erro ao fechar conex„o com MongoDB:", err);
+            console.error("Erro ao fechar conex√£o com MongoDB:", err);
         }
     }
     process.exit(0);
 }
 process.on('SIGTERM', () => desligamentoGracioso('SIGTERM'));
 process.on('SIGINT', () => desligamentoGracioso('SIGINT'));
+
 
